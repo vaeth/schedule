@@ -1,0 +1,46 @@
+#compdef schedule schedule-server
+local curcontext="$curcontext" state state_descr line
+typeset -A opt_args
+local service_opts
+service_opts=(
+'(1 * -)'{'--help','-h'}'[print a brief help]'
+'(1 * -)'{'--man','-\\?'}'[show extended help as a manpage]'
+'(1 * -)'{'--version','-V'}'[print version and exit]'
+{'(--port)-P+','(-P)--port='}'[PORT (set TCP port)]:port:(127.0.0.1)'
+{'(--addr)-A+','(-A)--addr='}'[ADDR (set address)]:port:(8471)'
+)
+if [[ $service == schedule ]]
+then	service_opts+=(
+{'(--exit)-e+','(-e)--exit='}'[STATUS (set exitstatus)]:exitstatus:(0)'
+{'(--job)-j+','(-j)--job='}'[JOB (set jobnumber)]:jobnumber:(0)'
+'*'{'-q','--quiet'}'[be more quiet (accumulative)]'
+'1:command:->cmds'
+'*::command:_normal'
+)
+fi
+_arguments -C -s -S -A '-*' : $service_opts
+local ret=$?
+case $state in
+(cmds)
+	local cmds
+	cmds=(
+	'help:print a brief help'
+	'man:show extended help as a manpage'
+	'stop-server:stop schedule-server'
+	'queue:queue job for later execution'
+	'start:queue and run job'
+	'run:start queued job sequentially even if failure'
+	'exec:start queued job sequentially until failure'
+	'bg:start queued jobs parallel and return'
+	'parallel:start queued jobs parallel and wait'
+	'wait:wait until queued running jobs are finished'
+	'list:list queued jobs'
+	'status:status of queued jobs'
+	'remove:remove queued jobs from list'
+	'insert:shift queued jobs in list'
+	'cancel:cancel queued jobs'
+	)
+	_describe -t commands 'command' cmds
+	ret=$?;;
+esac
+return ret

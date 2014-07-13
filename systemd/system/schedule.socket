@@ -1,0 +1,8 @@
+[Unit]
+Description=Server socket to schedule and execute queued jobs
+
+[Socket]
+ListenStream=127.0.0.1:8471
+
+[Install]
+WantedBy=sockets.target

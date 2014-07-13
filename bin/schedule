@@ -1,0 +1,618 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use integer;
+use Pod::Usage;
+use Getopt::Long;
+use IO::Socket;
+
+my $name = 'schedule';
+
+sub version {
+	print("$name 0.1\n");
+	exit(0)
+}
+
+=head1 NAME
+
+schedule - queue jobs for later execution and schedule them
+
+=head1 SYNOPSIS
+
+=over 8
+
+=item B<schedule> [options] B<queue>|B<start> I<cmd> [I<args> ...]
+
+=item B<schedule> [options] I<command> [I<jobs> ...]
+
+=item B<schedule> [options] I<stop-server>
+
+=back
+
+I<command> is one of:
+
+B<run>, B<exec>, B<bg>, B<parallel>, B<wait>, B<list>, B<status>,
+B<cancel>, B<remove>, B<insert>
+
+I<jobs> is either a job numbers or a string of the form I<from>B<:>I<to>
+where I<from> and B<to> may be omitted (and then mean 1 or infinity,
+respectively). If no I<jobs> argument is given, it defaults to B<:>.
+
+Exit status is usually the largest exit status of the scheduled command.
+In case of a fatal communication error (e.g. server not started) the
+exit status 7 is returned.
+
+To get an extended help, type B<schedule man>
+
+=head1 DESCRIPTION
+
+The idea of this project is that you can B<queue> jobs by "starting"
+them e.g. in different shells (possibly with different users or in chroots)
+and by using various commands.
+
+The "queued" jobs are not immediately executed but only in the moment when
+you B<run> them from some scheduler script.
+This scheduler script is meant to be a very simple ad-hoc script and can
+even be a single shell command like
+
+=over 8
+
+B<schedule run>
+
+=back
+
+(this example would simply execute all queued jobs sequentially).
+
+head1 EXAMPLE 1
+
+To initialize the whole system you must run eventually B<schedule init>
+(this can be run from your machines init system).
+
+Then run in three different shells the three commands
+
+=over 8
+
+=item B<schedule start emerge -NDu @world>
+
+=item B<schedule queue revdep-rebuild>
+
+=item B<schedule queue shutdown -h now>
+
+=back
+
+and then in a fourth shell B<schedule run>.
+Then the above three commands will be executed in order.
+If during the execution you realize that you want to cancel execution of the
+last command, you just press Ctrl-C in the shell where you started the last
+command and use other B<schedule> calls to e.g. insert something before the
+last command. Then you invoke the above command again.
+
+=head1 EXAMPLE 2
+
+Run in different shells the following commands
+
+=over 8
+
+=item B<schedule calculate 1>
+
+=item B<schedule calculate 2>
+
+=item B<schedule calculate 3>
+
+=item B<schedule shutdown -h now>
+
+=back
+
+and then in a further shell
+
+=over 8
+
+=item B<schedule run 1> && B<schedule parallel 2:3> && B<schedule run>
+
+=back
+
+The runs first B<calculate 1> and upon a succesfull finishing
+B<calculate 2> and B<calculate 3> in parallel.
+When both are succesfully finished, B<shutdown -h now> is executed.
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<--port=>I<port> or B<-P> I<port>
+
+Use port number I<port> for interprocess communication-
+The default port is B<8471>.
+
+=item B<--addr=>I<addr> or B<-A> I<addr>
+
+Bind/connect to I<addr>. The default is 127.0.0.1 (localhost only).
+
+=item B<--destjob=>I<jobnr> or B<-j> I<jobnr>
+
+If used with B<schedule queue>, it describes where the job should be inserted
+into the queue. The special number B<0> means the end of the list,
+negative number count from the end of the list. The default is B<0>.
+
+If used with B<schedule insert>, it describes the first position where
+the listed jobs are to be moved to.
+
+=item B<--exit=>I<exitstatus> or B<-e> I<exitstatus>
+
+Sets the I<exitstatus> for unscheduled jobs. The default is B<0>.
+
+=item B<--quiet> or B<-q> (accumulative)
+
+Be quiet.
+
+=item B<--help> or B<-h>
+
+Display brief help.
+
+=item B<--man> or B<-?>
+
+Display extended help as a manpage.
+
+=back
+
+=head1 COMMANDS
+
+=over 8
+
+=item B<queue> I<cmd> [I<args> ... I<args>]
+
+Queue I<cmd> I<args> ... I<args> for execution.
+The command will be exuted using the shell.
+
+=item B<run> I<jobs>
+
+Starts the selected jobs (sequentially) if they have not already
+been started. The exit status is the largest exit status of all I<jobs>.
+If a job has already been started, the command will wait for its finishing.
+If it already has been finished it is not started again, but the exit status
+is taken into account.
+
+=item B<exec> I<jobs>
+
+This is like B<schdeule run> but breaks further execution on the first job
+with nonzero exit status. Note that also finished jobs can have nonzero
+exit status.
+
+=item B<bg> I<jobs>
+
+This is like B<schedule run> but starts all non-running jobs in parallel
+and then returns.
+
+=item B<wait> I<jobs>
+
+This waits until all specified jobs have been finished and
+returns the largest exit status.
+
+=item B<parallel> I<jobs>
+
+This is like first running B<schedule bg> and then B<schedule wait>.
+
+=item B<list> I<jobs>
+
+Lists the command line of the queued jobs (unless B<--quiet> is used once).
+Outputs whether the job are waiting/running/finished, and in the latter case
+which exit status they have (unless B<--quiet> is used twice).
+Normally the exit stauts of this command is 0, but if B<--quiet> is used twice
+or more often, the exit status is the largest exit status of the listed
+commands.
+
+=item B<status> I<jobs>
+
+This is like B<--quiet> B<list>
+
+=item B<remove> I<jobs>
+
+Remove I<jobs> from the list of B<queued> jobs.
+Note that if the job is already started it is not stopped, but its exit status
+cannot be queried through B<schedule> anymore.
+
+=item B<insert> I<jobs>
+
+The list of queued jobs is ordered differently by shifting all specified I<jobs>
+to to the location specified with B<--destjobs>. Thus, if B<--destjobs=1>,
+all I<jobs> are shifted to the beginning of the list (renumbering the
+previously first jobs). The special value B<--destjobs=0> (default)
+means to shift to the end of the list, and negative numbers count from the
+end of the list. For instance B<schedule --job=-1 insert :2> will shift the
+first two jobs one command before the end of the list.
+
+=item B<cancel> I<jobs>
+
+If I<jobs> are not yet running they will never be started.
+If they are running, their exit status will be ignored.
+The scheduler is forced to assume that the jobs finished with the
+exitstatus specified by B<--cancel> (default is B<0>).
+
+=back
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright Martin VE<auml>th.
+This program is under the BSD License.
+
+=head1 AUTHOR
+
+Martin VE<auml>th E<lt>martin@mvath.deE<gt>
+
+=cut
+
+# Default for the Options:
+
+my $addr = '127.0.0.1';
+my $port = 8471;
+my $quiet = 0;
+my $cancel = 0;
+my $destjob = 0;
+
+
+# Global/State variables:
+
+my $len = 0x7FFFFFFF;
+my $runmode = undef;
+my $socket = undef;
+my $exitstatus = 0;
+
+#
+# Commands
+#
+
+sub cmd_stop_server {
+	return '' unless(&openclient() && $socket->send("stop\n$cancel"));
+	$socket->recv(my $fail);
+	unless($quiet) {
+		chomp($fail);
+		&error("jobs failed to close: $fail") if($fail ne '')
+	}
+	&closeclient();
+	1
+}
+
+sub cmd_queue {
+	return '' unless(&openclient());
+	&no_signals();
+	$socket->send("$runmode\n$destjob\n" . &join_quoted(@ARGV));
+	$socket->recv(my $unique, $len);
+	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = \&cancel_job;
+	if($runmode eq 'queue') {
+		$socket->recv(my $stat, $len);
+		unless(defined($stat) && ($stat eq 'run')) {
+			$exitstatus = (&is_nonnegative($stat) ? $stat : $cancel);
+			return 1
+		}
+	}
+	return '' unless(&closeclient());
+	$exitstatus = system(@ARGV);
+	# Sending exitstatus must cause no errors/warnings:
+	$socket->send("end\n" . "$unique\n" . "$exitstatus")
+		if(&openclient(1));
+	&closeclient(1);
+	1
+}
+
+sub cmd_run {
+	&validate_jobs();
+	&runner()
+}
+
+sub cmd_parallel {
+	&validate_jobs();
+	$runmode = 'bg';
+	return unless(&runner());
+	$runmode = 'wait';
+	&runner()
+}
+
+sub cmd_list {
+	&validate_jobs();
+	my $sent = '';
+	my $send = ($quiet ? 'status' : 'list');
+	for my $a (@ARGV) {
+		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
+			unless($sent) {
+				$sent = 1;
+				return '' unless(&openclient())
+			}
+			return '' unless($socket->send("$send\n$i"));
+			$socket->recv(my $reply, $len);
+			return '' unless($reply =~ s/^(\d+)\n?//);
+			my $job = $1;
+			if($job eq '0') {
+				last if($end eq '');
+				&set_exitstatus(1);
+				&error("illegal job number $job");
+				next
+			}
+			my $stat;
+			if($quiet) {
+				$stat = $reply
+			} else {
+				$reply =~ s/^([^\n]*)\n//;
+				$stat = $1
+			}
+			if($stat eq '-') {
+				$stat = 'listening'
+			} elsif($stat eq '') {
+				$stat = 'running'
+			} else {
+				&set_exitstatus($stat)
+			}
+			if($quiet < 2) {
+				if($quiet) {
+					print($stat . "\n")
+				} else {
+					print("$job ($stat): $reply\n")
+				}
+			}
+		}
+	}
+	return 1 unless($sent);
+	$socket->send("\n")
+}
+
+sub cmd_status {
+	++$quiet;
+	&cmd_list()
+}
+
+sub cmd_cancel {
+	&validate_jobs();
+	my $sent = '';
+	for my $a (@ARGV) {
+		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
+			unless($sent) {
+				$sent = 1;
+				return '' unless(&openclient())
+			}
+			return '' unless($socket->send("cancel\n$cancel\n$i"));
+			$socket->recv(my $reply, $len);
+			my ($job, $stat) = split(/\s+/, $reply);
+			if($job eq '0') {
+				last if($end eq '');
+				$exitstatus = 1;
+				&error("illegal job number $job")
+			}
+			if($stat) {
+				$exitstatus = 1;
+				&error("job $job failed to close")
+			}
+		}
+	}
+	return 1 unless($sent);
+	$socket->send("\n")
+}
+
+sub cmd_remove {
+	&validate_jobs();
+	return '' unless(&openclient());
+	return '' unless($socket->send("remove\n$cancel\n" . join(' ', @ARGV)));
+	$socket->recv(my $failed, $len);
+	my @fail = split(/\s+/, $failed);
+	if(@fail) {
+		$exitstatus = 1;
+		&error('jobs failed to close: ' . join(' ',@fail))
+	}
+	1
+}
+
+sub cmd_insert {
+	&validate_jobs();
+	return '' unless(&openclient());
+	return '' unless($socket->send("insert\n$destjob\n" . join(' ', @ARGV)));
+	$socket->recv(my $failed, $len);
+	my @fail = split(/\s+/, $failed);
+	if(@fail) {
+		$exitstatus = 1;
+		&error('jobs failed to close: ' . join(' ',@fail))
+	}
+	1
+}
+
+#
+# Functions
+#
+
+sub openclient {
+	$socket = new IO::Socket::INET(
+		PeerAddr => $addr,
+		PeerPort => $port,
+		Type => SOCK_STREAM
+	);
+	return 1 if(defined($socket));
+	my ($silence) = @_;
+	&error("unable to setup socket: $!",
+		'maybe you should run schedule-server')
+			unless(defined($silence) && $silence);
+	''
+}
+
+sub closeclient {
+	return 1 unless(defined($socket));
+	my $ret = ($socket->close());
+	$socket = undef;
+	return 1 if($ret);
+	my ($silence) = @_;
+	&error("failed to close socket: $!")
+		unless(defined($silence) && $silence);
+	''
+}
+
+sub runner {
+	my $send = (($runmode eq 'exec') ? 'run' : $runmode) . "\n";
+	for my $a (@ARGV) {
+		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
+			return '' unless(&openclient());
+			return '' unless($socket->send("$send$i"));
+			$socket->recv(my $reply, $len);
+			$reply =~ s/^(\d*)\n?//;
+			my $job = $1;
+			if($job eq '0') {
+				if($end ne '') {
+					&set_exitstatus(1);
+					&error("illegal job number $job")
+				}
+				last
+			}
+			if($runmode ne 'bg') {
+				$socket->recv(my $status, $len);
+				$status = $cancel
+					unless(&is_nonnegative($status));
+				if($status) {
+					&set_exitstatus($status);
+					return 1 if($runmode eq 'exec');
+				}
+			}
+			return '' unless(&closeclient())
+		}
+	}
+}
+
+# Cancel a job (if "schedule queue" is interrupted by a signal):
+
+sub cancel_job {
+	&no_signals();
+	&closeclient(1);
+	&openclient(1) && ($socket->send("cancel\n$cancel\n$destjob"))
+		&& $socket->recv(my $reply, $len) && $socket->send("\n");
+	exit($cancel)
+}
+
+sub no_signals {
+	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = sub {1}
+}
+
+# Check whether @ARGV are valid job specifications.
+# Let @ARGV = (':') if there are none.
+
+sub validate_jobs {
+	unless(@ARGV) {
+		@ARGV = (':');
+		return
+	}
+	for my $i (@ARGV) {
+		unless($i =~ /^(\d+|(\d*\:\d*))$/) {
+			&fatal("invalid argument: '$i'")
+		}
+	}
+}
+
+sub start_end {
+	my ($a) = @_;
+	return ($a, $a) if($a =~ /^\d+$/);
+	$a =~ /^(\d*)\:(\d*)$/;
+	((($1 eq '') ? 1 : $1), $2)
+}
+
+# increase exitstatus to argument
+
+sub set_exitstatus {
+	my ($stat) = @_;
+	$exitstatus = $stat if($exitstatus < $stat)
+}
+
+# like join(' ', @_), but shell-quote arguments
+
+sub join_quoted {
+	my @r;
+	for my $i (@_) {
+		my $a = $i;
+		$a =~ s/\'/\'\\\'\'/go;
+		$a = "'" . $a . "'";
+		$a =~ s/(^|[^\\])\'([\da-zA-Z\_\-\,\.\:\/]*)\'/$1$2/g;
+		push(@r, ($a ne '') ? $a : "''")
+	}
+	return join(' ', @r)
+}
+
+sub fatal {
+	print(STDERR "fatal: ", join("\n" . (' ' x 7), @_), "\n");
+	exit(1)
+}
+
+sub error {
+	print(STDERR "error: ", join("\n" . (' ' x 7), @_), "\n");
+	''
+}
+
+sub warning {
+	print(STDERR "warning: ", join("\n" . (' ' x 9), @_), "\n")
+}
+
+sub is_nonnegative {
+	my ($i) = @_;
+	(defined($i) && ($i =~ /^\d+$/))
+}
+
+#
+# Now the main program:
+#
+
+# Parse Options:
+
+$Getopt::Long::bundling = 1;
+GetOptions(
+	'help|h', sub { pod2usage(1) },
+	'man|?', sub { pod2usage(-verbose => 2) },
+	'version|V', \&version,
+	'port|P=i', \$port,
+	'addr|A=s', \$addr,
+	'exit|e=i', \$cancel,
+	'job|j=i', \$destjob,
+	'quiet|q+', \$quiet
+) or pod2usage(2);
+
+# Postprocess options:
+
+&fatal("illegal port $port") if($port =~ /\D/);
+&fatal("illegal --exit $cancel") if(("$cancel" =~ /\D/) || ($cancel < 0));
+
+# Process command:
+
+my $action = shift(@ARGV);
+$action = '' unless(defined($action));
+if($action =~ /^sto/i) {
+	$action = \&cmd_stop_server
+} elsif($action =~ /^(re|d)/i) {
+	$action = \&cmd_remove
+} elsif($action =~ /^r/i) {
+	$runmode = 'run';
+	$action = \&cmd_run
+} elsif($action =~ /^(e|x)/i) {
+	$runmode = 'exec';
+	$action = \&cmd_run
+} elsif($action =~ /^b/i) {
+	$runmode = 'bg';
+	$action = \&cmd_run
+} elsif($action =~ /^p/i) {
+	$action = \&cmd_parallel
+} elsif($action =~ /^w/i) {
+	$runmode = 'wait';
+	$action = \&cmd_run
+} elsif($action =~ /^l/i) {
+	$action = \&cmd_list
+} elsif($action =~ /^stat/i) {
+	++$quiet;
+	$action = \&cmd_list
+} elsif($action =~ /^q/i) {
+	$runmode = 'queue';
+	$action = \&cmd_queue
+} elsif($action =~ /^s/i) {
+	$runmode = 'start';
+	$action = \&cmd_queue
+} elsif($action =~ /^i/i) {
+	$action = \&cmd_insert
+} elsif($action =~ /^c/i) {
+	$action = \&cmd_cancel
+} elsif($action =~ /^m/i) {
+	pod2usage(verbose => 2)
+} elsif($action =~ /^h|\?/i) {
+	pod2usage(0)
+}
+pod2usage(2) unless(ref($action) eq 'CODE');
+$exitstatus = 7 unless(&{$action}());
+$exitstatus = 7 unless(&closeclient());
+exit($exitstatus);

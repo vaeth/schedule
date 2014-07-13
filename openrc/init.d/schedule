@@ -1,0 +1,16 @@
+#!/sbin/runscript
+# (C) Martin V\"ath <martin@mvath.de>
+
+description='server to schedule and execute queued jobs'
+
+start() {
+	ebegin 'starting schedule-server'
+	schedule-server
+	eend ${?}
+}
+
+stop() {
+	ebegin 'stopping schedule-server'
+	schedule stop-server
+	eend ${?}
+}

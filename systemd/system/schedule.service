@@ -1,0 +1,9 @@
+[Unit]
+Description=Server to schedule and execute queued jobs
+
+[Service]
+ExecStart=/usr/bin/schedule-server
+ExecStop=/usr/bin/schedule stop-server
+
+[Install]
+WantedBy=multi-user.target

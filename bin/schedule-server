@@ -1,0 +1,388 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use integer;
+use Pod::Usage;
+use Getopt::Long;
+use IO::Socket;
+
+my $name = 'schedule-server';
+
+sub version {
+	print("$name 0.1\n");
+	exit(0)
+}
+
+=head1 NAME
+
+schedule-server - server for the schedule client; schedule man for details
+
+=head1 SYNOPSIS
+
+=over 8
+
+=item B<schedule-server> [options]
+
+=back
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<--port=>I<port> or B<-P> I<port>
+
+Use port number I<port> for interprocess communication.
+The default port is B<8471>.
+
+=item B<--addr=>I<addr> or B<-A> I<addr>
+
+Bind/connect to I<addr>. The default is 127.0.0.1 (localhost only).
+
+=item B<--help> or B<-h>
+
+Display brief help.
+
+=item B<--man> or B<-?>
+
+Display extended help as a manpage.
+
+=back
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright Martin VE<auml>th.
+This program is under the BSD License.
+
+=head1 AUTHOR
+
+Martin VE<auml>th E<lt>martin@mvath.deE<gt>
+
+=cut
+
+# Default for the Options:
+
+my $addr = '127.0.0.1';
+my $port = 8471;
+
+# Global/State variables:
+
+my $len = 0x7FFFFFFF;
+my $joblist = [];
+my $unique = 0;
+my $socket = undef;
+
+#
+# Functions
+#
+
+sub signal_handler {
+	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = sub {1};
+	&send_exit(7);
+	exit(130);
+}
+
+sub openserver {
+	$socket = new IO::Socket::INET(
+		LocalAddr => $addr,
+		LocalPort => $port,
+		Type => SOCK_STREAM,
+		Listen => SOMAXCONN,
+		Reuse => 1
+	);
+	unless(defined($socket)) {
+		&fatal("unable to setup socket: $!");
+		return ''
+	}
+	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = \&signal_handler;
+	1
+}
+
+
+sub closeserver {
+	return 1 unless(defined($socket) && !($socket->close()));
+	# &fatal("failed to close socket: $!");
+	''
+}
+
+sub serverloop {
+	while(defined(my $conn = $socket->accept())) {
+		my $will_close = 1;
+		$conn->recv(my $data, $len);
+		$data =~ s/^([^\n]*)\n?//;
+		my $cmd = (defined($1) ? $1 : '');
+		if(($cmd eq 'queue') || ($cmd eq 'start')) {
+			$data =~ s/^([+-]?\d*)\n//;
+			my $index = &my_index($2);
+			my $stat = (($cmd eq 'start') ? '' : undef);
+			++$unique;
+			$conn->send($unique);
+			splice(@$joblist, $index, 0, [$conn, $data, $stat, $unique, []]);
+			$will_close = '' unless(defined($stat))
+		} elsif(($cmd eq 'run') || ($cmd eq 'bg') || ($cmd eq 'wait')) {
+			my $i = &my_index($data);
+			my $reply = &indexname($i);
+			if($reply eq '0') {
+				$conn->send($reply);
+			} else {
+				my $job = $joblist->[$i];
+				my $stat = &get_status($job);
+				unless(defined($stat)) {
+					if($cmd ne 'wait') {
+						$stat = '';
+						&set_status($job, $stat);
+						&get_conn($job)->send('run');
+					}
+				}
+				$conn->send($reply);
+				if($cmd ne 'bg') {
+					if(defined($stat) && ($stat ne '')) {
+						$conn->send($stat)
+					} else {
+						&push_wait($job, $conn);
+						$will_close = ''
+					}
+				}
+			}
+		} elsif($cmd eq 'end') {
+			$data =~ s/^([^\n]*)\n//;
+			my $u = (defined($1) ? $1 : '');
+			for my $j (@$joblist) {
+				if(&get_unique($j) eq $u) {
+					my $stat = &get_status($j);
+					&send_finish($j, $data);
+					&set_status($j, $data)
+						if(defined($stat) &&
+							($stat eq ''));
+					last
+				}
+			}
+		} elsif($cmd eq 'cancel') {
+			while(1) {
+				$data =~ s/^(\d+)\n//;
+				my $stat = (defined($1) ? $1 : 0);
+				my $index = &my_index($data);
+				my $reply = &indexname($index);
+				if($reply ne '0') {
+					my $job = $joblist->[$index];
+					$reply .= "\n-" unless(&send_remove($job, $stat));
+					&send_finish($job, $stat);
+					&set_status($job, $stat)
+				}
+				$conn->send($reply);
+				$conn->recv($data, $len);
+				last unless($data =~ s/^(cancel)\n?//)
+			}
+		} elsif(($cmd eq 'list') || ($cmd eq 'status')) {
+			while(1) {
+				my $i = &my_index($data);
+				my $reply = &indexname($i);
+				if($reply ne '0') {
+					my $job = $joblist->[$i];
+					my $stat = &get_status($job);
+					$stat = (defined($stat) ? $stat : '-');
+					$reply .= "\n$stat";
+					$reply .= "\n" . &get_cmd($job)
+						if($cmd eq 'list')
+				}
+				$conn->send($reply);
+				$conn->recv($data, $len);
+				last unless($data =~ s/^(list|status)\n?//);
+				$cmd = $1
+			}
+		} elsif($cmd eq 'insert') {
+			$data =~ s/([^\n]*\n)//;
+			my $index = &my_index($1);
+			my @insert = ();
+			for my $i (&unique_indices($data)) {
+				push(@insert, $joblist->[$i]);
+				$joblist->[$i] = undef
+			}
+			my $oldlist = $joblist;
+			$joblist = [];
+			for(my $i = 0; $i < $index; ++$i) {
+				my $j = $oldlist->[$i];
+				push(@$joblist, $j) if(defined($j))
+			}
+			push(@$joblist, @insert);
+			for(my $i = $index; $i < @$oldlist; ++$i) {
+				my $j = $oldlist->[$i];
+				push(@$joblist, $j) if(defined($j))
+			}
+		} elsif($cmd eq 'remove') {
+			$data =~ s/^(\d+)\n//;
+			my $stat = (defined($1) ? $1 : 0);
+			my @fail = ();
+			for my $i (&unique_indices($data)) {
+				my $job = $joblist->[$i];
+				push(@fail, &indexname($i))
+					unless(&send_remove($job, $stat));
+				&send_finish($job, $stat);
+				$joblist->[$i] = undef
+			}
+			my $oldlist = $joblist;
+			$joblist = [];
+			for(my $i = 0; $i < @$oldlist; ++$i) {
+				my $j = $oldlist->[$i];
+				push(@$joblist, $j) if(defined($j))
+			}
+			$conn->send(join(' ', @fail) . "\n")
+		} elsif($cmd eq 'stop') {
+			$data =~ /^(\d+)/;
+			my $stat = (defined($1) ? $1 : 0);
+			my @fail = &send_exit($stat);
+			my $ret = $conn->send(join(' ', @fail) . "\n");
+			$ret = '' if(@fail);
+			$ret = '' unless($conn->close());
+			return $ret
+		}
+		$conn->close() if($will_close)
+	}
+	''
+}
+
+sub send_exit {
+	my ($stat) = @_;
+	my @fail = ();
+	for(my $i = 0; $i < @$joblist; ++$i) {
+		my $job = $joblist->[$i];
+		push(@fail, &indexname($i)) unless(&send_remove($job, $stat));
+		&send_finish($job, $stat)
+	}
+	@fail
+}
+
+sub send_remove {
+	my ($job, $stat) = @_;
+	return 1 if(defined(&get_status($job)));
+	my $ret = 1;
+	my $conn = &get_conn($job);
+	$ret = '' unless($conn->send($stat));
+	$conn->close() && $ret
+}
+
+sub send_finish {
+	my ($job, $stat) = @_;
+	while(defined(my $conn = &shift_wait($job))) {
+		$conn->send($stat)
+	}
+}
+
+sub get_conn {
+	$_[0]->[0];
+}
+
+sub get_cmd {
+	$_[0]->[1];
+}
+
+sub get_status {
+	$_[0]->[2];
+}
+
+sub set_status {
+	$_[0]->[2] = $_[1]
+}
+
+sub get_unique {
+	$_[0]->[3];
+}
+
+sub shift_wait {
+	my $wait = $_[0]->[4];
+	shift(@$wait)
+}
+
+sub push_wait {
+	my ($j, $p) = @_;
+	my $wait = $j->[4];
+	push(@$wait, $p)
+}
+
+sub get_wait {
+	$_[0]->[4];
+}
+
+# return unique list of internal indices corresponding to index names
+
+sub unique_indices {
+	my %have = ();
+	my @ret = ();
+	my ($ind) = @_;
+	$ind = '' unless(defined($ind));
+	for my $name (split(/\s+/, $_[0])) {
+		if($name =~ /^(\d*)\:(\d*)$/) {
+			my $i = (($1 eq '') ? 1 : $1);
+			my $end = &my_index($2);
+			for($i = &my_index($i); $i <= $end; ++$i) {
+				next if(exists($have{$i}));
+				$have{$i} = 1;
+				push(@ret, $i)
+			}
+			next
+		}
+		my $i = &my_index($1);
+		next if(exists($have{$i}));
+		$have{$i} = 1;
+		push(@ret, $i);
+	}
+	@ret
+}
+
+# return name corresponding to internal index $i
+
+sub indexname {
+	my ($i) = @_;
+	return '0' if($i == @$joblist);
+	++$i;
+	"$i"
+}
+
+# return internal index of array corresponding to $1
+
+sub my_index {
+	my ($arg) = @_;
+	$arg = 0 unless(defined($arg) && ($arg =~ /^[+-]?\d+$/));
+	my $max = scalar(@$joblist);
+	return $max if($arg > $max);
+	return ($arg - 1) if($arg > 0);
+	$arg += $max;
+	if($arg < 0) {
+		0
+	} else {
+		$arg
+	}
+}
+
+sub fatal {
+	print(STDERR "fatal: ", join("\n" . (' ' x 7), @_), "\n");
+	exit(1)
+}
+
+#
+# Now the main program:
+#
+
+# Parse Options:
+
+$Getopt::Long::bundling = 1;
+GetOptions(
+	'help|h', sub { pod2usage(1) },
+	'man|?', sub { pod2usage(-verbose => 2) },
+	'version|V', \&version,
+	'port|P=i', \$port,
+	'addr|A=s', \$addr
+) or pod2usage(2);
+
+# Postprocess options:
+
+&fatal("illegal port $port") if($port =~ /\D/);
+
+# Process arguments:
+
+pod2usage(2) if(@ARGV);
+
+# Call main functions:
+
+my $exitstatus = ((&openserver() && &serverloop()) ? 0 : 1);
+$exitstatus = 1 unless(&closeserver());
+exit($exitstatus);

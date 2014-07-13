@@ -1,0 +1,91 @@
+(C) Martin Väth <martin@mvath.de>
+This project is under the BSD license.
+
+schedule - script to schedule jobs in a multiuser multitasking environment
+
+Once you started the server with schedule-server (which might be done by
+an init-script), you can queue commands for later execution by using
+
+	schedule queue command [arguments]
+
+This can be called with various users and even in chroots.
+Instead of running the queued command immediately, this is postponed until
+you start a control "script".
+
+In the simplest case, this control "script" can be just the command
+
+	schedule run
+
+which will sequentially execute all queued commands.
+If you use "exec" instead of "run", the execution will be stopped in the
+moment when one process returns a nonzero exit status.
+At any time you can queue new commands to the end of the list.
+So far, this is essentially the functionality of the "starter" script from
+	https://github.com/vaeth/schedule/
+
+However, there are much more possibilities:
+You can display the current list with
+
+	schedule list
+
+Even while the above jobs are running, you can  queue new commands also in
+the middle of the list with the --job=... option.
+You can order the current list differently using "schedule insert".
+For instance,
+
+	schedule --job=1 insert -2:
+
+while shift the last two jobs to the beginning of the list.
+
+Moreover, you can start jobs in parallel. In the simplest case,
+
+	schedule parallel
+
+will just run all queued jobs in parallel and return when they are finished.
+You can also return immediately:
+
+	schedule bg
+
+and wait later on:
+
+	schedule wait
+
+However, all exit status values correspond to those of the jobs (the largest
+exit status counts if several jobs are involved). Hence, you can write
+ad-hoc "shell scripts" controlling the jobs, like e.g.
+
+	schedule run 1 && schedule bg 2:4 && schedule wait :3 && schedule run
+
+This will first run job 1, when this is successfully finished start 2, 3, 4,
+and once 2 and 3 are successfully finished start all remaining jobs
+simultaneously.  Note that you can break the above command (with Ctrl-C) and
+run a different one without stopping the jobs already running.
+
+For further details on the various commands and options, use
+
+	schedule man
+
+REQUIREMENTS
+============
+
+You need a multitasking system with POSIX TCP Sockets - any Linux flavour
+will do - and a not too ancient version of perl. (Practically any full
+perl-5 installation contains the required libraries in its core.)
+
+
+INSTALLATION
+============
+
+If you are a gentoo user, you can just emerge schedule from the mv overlay.
+
+Otherwise you just have to copy bin/* into /usr/bin/
+or any other directory of your $PATH.
+For zsh completion support also copy zsh/_schedule into a directory of
+your zsh's $fpath.
+
+For openrc-support copy openrc/init.d/schedule to /etc/init.d/schedule
+and activate it in the usual way.
+For systemd-support copy systemd/system/schedule.{service,socket} to your
+systemd system folder and activate the service or socket file in the usual way.
+If you copied the main script not to /usr/bin/schedule, you have to modify
+the schedule.service file for systemd correspondingly.
