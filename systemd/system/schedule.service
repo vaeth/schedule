@@ -2,7 +2,11 @@
 Description=Server to schedule and execute queued jobs
 
 [Service]
-ExecStart=/usr/bin/schedule-server
+User=nobody
+Group=nobody
+SupplementaryGroups=
+Nice=19
+ExecStart=/usr/bin/schedule-server -k
 ExecStop=/usr/bin/schedule stop-server
 
 [Install]

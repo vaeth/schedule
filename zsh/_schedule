@@ -9,15 +9,26 @@ service_opts=(
 {'(--port)-P+','(-P)--port='}'[PORT (set TCP port)]:port:(127.0.0.1)'
 {'(--addr)-A+','(-A)--addr='}'[ADDR (set address)]:port:(8471)'
 )
-if [[ $service == schedule ]]
-then	service_opts+=(
+case ${service} in
+(*server)
+	service_opts+=(
+{'(--user)-u+','(-u)--user='}'[USER (use USER permissions)]:user name:_users'
+{'(--group)-g+','(-g)--group='}'[GROUP (use GROUP permissions)]:group name:_groups'
+{'(--uid --user -u)-U+','(-u --user -u)--uid='}'[UID (use UID permissions)]:user id:(65534)'
+{'(--gid --group -g)-G+','(-G --group -g)--gid='}'[GID (use GID permissions)]:group id:(65534)'
+{'(-n --user -u --uid -U)--no-change-user','(--no-change-user --user -u --uid -U)-n'}'[do not change user permissions]'
+{'(-N --group -g --gid -G)--no-change-group','(--no-change-group --group -g --gid -G)-N'}'[do not change group permissions]'
+{'(-k --user -u --uid -U --group -g --gid -G --no-change-user -n)--keep-permissions','(--keep-permissions --user -u --uid -U --group -g --gid -G --no-change-user -n)-k'}'[do not change user/group permissions]'
+);;
+(*)
+	service_opts+=(
 {'(--exit)-e+','(-e)--exit='}'[STATUS (set exitstatus)]:exitstatus:(0)'
 {'(--job)-j+','(-j)--job='}'[JOB (set jobnumber)]:jobnumber:(0)'
 '*'{'-q','--quiet'}'[be more quiet (accumulative)]'
 '1:command:->cmds'
 '*::command:_normal'
-)
-fi
+);;
+esac
 _arguments -C -s -S -A '-*' : $service_opts
 local ret=$?
 case $state in

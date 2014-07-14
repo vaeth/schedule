@@ -9,7 +9,7 @@ use IO::Socket;
 my $name = 'schedule-server';
 
 sub version {
-	print("$name 0.1\n");
+	print("$name 0.2\n");
 	exit(0)
 }
 
@@ -22,6 +22,12 @@ schedule-server - server for the schedule client; schedule man for details
 =over 8
 
 =item B<schedule-server> [options]
+
+Start server for the B<schedule> command.
+Use option -k if you start it as a user (which is completely safe
+if you are not running it from a init-script).
+Otherwise, for security reasons, it is attempted to dropped permissions
+to user/group nobody (or uid/gid 65534 as a fallback),
 
 =back
 
@@ -37,6 +43,40 @@ The default port is B<8471>.
 =item B<--addr=>I<addr> or B<-A> I<addr>
 
 Bind/connect to I<addr>. The default is 127.0.0.1 (localhost only).
+
+=item B<--keep-permissions> or B<-k>
+
+Do not make any attempt to change user or group permissions.
+Use this option if you start the server as a user or if you use some other
+mechanism in a startup file to change the permissions.
+Note that this program does nothing else but to read/write to the specified
+a TCP port, so any permissions which allow to do this are sufficient.
+
+=item B<--user=>I<user> or B<-u> I<user>
+
+Drop permissions to user I<user> instead of B<nobody>.
+
+=item B<--group=>I<group> or B<-u> I<group>
+
+Drop permissions to group I<group> instead of B<nobody>.
+
+=item B<--uid=>I<uid> or B<-U> I<uid>
+
+Drop permissions to user with id I<uid> instead of 65534.
+(If this is specified and valid the value of B<--user> is ignored.)
+
+=item B<--gid=>I<gid> or B<-U> I<gid>
+
+Drop permissions to user with id I<gid> instead of 65534.
+(If this is specified and valid the value of B<--group> is ignored.)
+
+=item B<--no-change-user> or B<-n>
+
+Do not attempt to change the user.
+
+=item B<--no-change-group> or B<-N>
+
+Do not attempt to change the group.
 
 =item B<--help> or B<-h>
 
@@ -61,6 +101,12 @@ Martin VE<auml>th E<lt>martin@mvath.deE<gt>
 
 # Default for the Options:
 
+my $uid = '';
+my $gid = '';
+my $user = 'nobody';
+my $group = 'nobody';
+my $keepuser = '';
+my $keepgroup = '';
 my $addr = '127.0.0.1';
 my $port = 8471;
 
@@ -358,6 +404,15 @@ sub fatal {
 	exit(1)
 }
 
+sub warning {
+	print(STDERR "warning: ", join("\n" . (' ' x 9), @_), "\n")
+}
+
+sub is_nonnegative {
+	my ($i) = @_;
+	(defined($i) && ($i =~ /^\d+$/))
+}
+
 #
 # Now the main program:
 #
@@ -370,12 +425,66 @@ GetOptions(
 	'man|?', sub { pod2usage(-verbose => 2) },
 	'version|V', \&version,
 	'port|P=i', \$port,
-	'addr|A=s', \$addr
+	'addr|A=s', \$addr,
+	'uid|U=s', \$uid,
+	'gid|G=s', \$gid,
+	'user|u=s', \$user,
+	'group|g=s', \$group,
+	'no-change-user|n', \$keepuser,
+	'no-change-group|N', \$keepgroup,
+	'keep-permissions|k', sub { $keepuser = $keepgroup = 1 }
 ) or pod2usage(2);
+
+# First, drop permissions if possible:
+
+unless($keepgroup) {
+	unless(&is_nonnegative($gid)) {
+		if($group =~ /^[a-zA-Z0-9]+$/) {
+			$gid = getgrnam($user);
+			unless(&is_nonnegative($gid)) {
+				&warning("cannot get group id of $group. Falling back to 65534");
+				$gid = 65534
+			}
+		} else {
+			$gid = 65534
+		}
+	}
+	$) = ($gid);
+	$) = $gid if($! ne '');
+	if($! ne '') {
+		&warning("failed to set egid to $gid: $!")
+	}
+	$( = $gid;
+	if($! ne '') {
+		&warning("failed to set gid to $gid: $!");
+	}
+}
+
+unless($keepuser) {
+	unless(&is_nonnegative($uid)) {
+		if($user =~ /^[a-zA-Z0-9]+$/) {
+			$uid = getpwnam($user);
+			unless(&is_nonnegative($uid)) {
+				&warning("cannot get group id of $group. Falling back to 65534");
+				$uid = 65534
+			}
+		} else {
+			$uid = 65534
+		}
+	}
+	$> = $uid;
+	if($! ne '') {
+		&warning("failed to set euid to $uid: $!")
+	}
+	$< = $uid;
+	if($! ne '') {
+		&warning("failed to set uid to $uid: $!")
+	}
+}
 
 # Postprocess options:
 
-&fatal("illegal port $port") if($port =~ /\D/);
+&fatal("illegal port $port") unless(&is_nonnegative($port) && $port <= 0xFFFF);
 
 # Process arguments:
 

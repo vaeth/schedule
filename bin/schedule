@@ -9,7 +9,7 @@ use IO::Socket;
 my $name = 'schedule';
 
 sub version {
-	print("$name 0.1\n");
+	print("$name 0.2\n");
 	exit(0)
 }
 
@@ -263,7 +263,7 @@ my $exitstatus = 0;
 
 sub cmd_stop_server {
 	return '' unless(&openclient() && $socket->send("stop\n$cancel"));
-	$socket->recv(my $fail);
+	$socket->recv(my $fail, $len);
 	unless($quiet) {
 		chomp($fail);
 		&error("jobs failed to close: $fail") if($fail ne '')
@@ -425,7 +425,7 @@ sub openclient {
 	return 1 if(defined($socket));
 	my ($silence) = @_;
 	&error("unable to setup socket: $!",
-		'maybe you should run schedule-server')
+		'maybe you should run first: schedule-server -k &')
 			unless(defined($silence) && $silence);
 	''
 }
@@ -567,8 +567,9 @@ GetOptions(
 
 # Postprocess options:
 
-&fatal("illegal port $port") if($port =~ /\D/);
-&fatal("illegal --exit $cancel") if(("$cancel" =~ /\D/) || ($cancel < 0));
+&fatal("illegal port $port") unless(&is_nonnegative($port) && $port <= 0xFFFF);
+&fatal("illegal --exit $cancel")
+	unless(&is_nonnegative($cancel) && $cancel <= 0xFF);
 
 # Process command:
 
