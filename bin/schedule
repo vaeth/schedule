@@ -4,12 +4,13 @@ use warnings;
 use integer;
 use Pod::Usage;
 use Getopt::Long;
+use IO::Select;
 use IO::Socket;
 
 my $name = 'schedule';
 
 sub version {
-	print("$name 0.2\n");
+	print("$name 0.3\n");
 	exit(0)
 }
 
@@ -128,7 +129,7 @@ The default port is B<8471>.
 
 Bind/connect to I<addr>. The default is 127.0.0.1 (localhost only).
 
-=item B<--destjob=>I<jobnr> or B<-j> I<jobnr>
+=item B<--job=>I<jobnr> or B<-j> I<jobnr>
 
 If used with B<schedule queue>, it describes where the job should be inserted
 into the queue. The special number B<0> means the end of the list,
@@ -214,9 +215,9 @@ cannot be queried through B<schedule> anymore.
 =item B<insert> I<jobs>
 
 The list of queued jobs is ordered differently by shifting all specified I<jobs>
-to to the location specified with B<--destjobs>. Thus, if B<--destjobs=1>,
+to to the location specified with B<--job>. Thus, if B<--job=1>,
 all I<jobs> are shifted to the beginning of the list (renumbering the
-previously first jobs). The special value B<--destjobs=0> (default)
+previously first jobs). The special value B<--job=0> (default)
 means to shift to the end of the list, and negative numbers count from the
 end of the list. For instance B<schedule --job=-1 insert :2> will shift the
 first two jobs one command before the end of the list.
@@ -245,10 +246,10 @@ Martin VE<auml>th E<lt>martin@mvath.deE<gt>
 
 my $addr = '127.0.0.1';
 my $port = 8471;
+my $timeout = 10;
 my $quiet = 0;
 my $cancel = 0;
 my $destjob = 0;
-
 
 # Global/State variables:
 
@@ -262,8 +263,8 @@ my $exitstatus = 0;
 #
 
 sub cmd_stop_server {
-	return '' unless(&openclient() && $socket->send("stop\n$cancel"));
-	$socket->recv(my $fail, $len);
+	return '' unless(&openclient() && &client_send("stop\n$cancel"));
+	&client_recv(my $fail, $timeout);
 	unless($quiet) {
 		chomp($fail);
 		&error("jobs failed to close: $fail") if($fail ne '')
@@ -275,11 +276,11 @@ sub cmd_stop_server {
 sub cmd_queue {
 	return '' unless(&openclient());
 	&no_signals();
-	$socket->send("$runmode\n$destjob\n" . &join_quoted(@ARGV));
-	$socket->recv(my $unique, $len);
+	&client_send("$runmode\n$destjob\n" . &join_quoted(@ARGV));
+	&client_recv(my $unique, $timeout);
 	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = \&cancel_job;
 	if($runmode eq 'queue') {
-		$socket->recv(my $stat, $len);
+		&client_recv(my $stat, '');
 		unless(defined($stat) && ($stat eq 'run')) {
 			$exitstatus = (&is_nonnegative($stat) ? $stat : $cancel);
 			return 1
@@ -288,7 +289,7 @@ sub cmd_queue {
 	return '' unless(&closeclient());
 	$exitstatus = system(@ARGV);
 	# Sending exitstatus must cause no errors/warnings:
-	$socket->send("end\n" . "$unique\n" . "$exitstatus")
+	&client_send("end\n" . "$unique\n" . "$exitstatus")
 		if(&openclient(1));
 	&closeclient(1);
 	1
@@ -317,8 +318,8 @@ sub cmd_list {
 				$sent = 1;
 				return '' unless(&openclient())
 			}
-			return '' unless($socket->send("$send\n$i"));
-			$socket->recv(my $reply, $len);
+			return '' unless(&client_send("$send\n$i"));
+			&client_recv(my $reply, $timeout);
 			return '' unless($reply =~ s/^(\d+)\n?//);
 			my $job = $1;
 			if($job eq '0') {
@@ -351,7 +352,7 @@ sub cmd_list {
 		}
 	}
 	return 1 unless($sent);
-	$socket->send("\n")
+	&client_send("\n")
 }
 
 sub cmd_status {
@@ -368,8 +369,8 @@ sub cmd_cancel {
 				$sent = 1;
 				return '' unless(&openclient())
 			}
-			return '' unless($socket->send("cancel\n$cancel\n$i"));
-			$socket->recv(my $reply, $len);
+			return '' unless(&client_send("cancel\n$cancel\n$i"));
+			&client_recv(my $reply, $timeout);
 			my ($job, $stat) = split(/\s+/, $reply);
 			if($job eq '0') {
 				last if($end eq '');
@@ -383,14 +384,14 @@ sub cmd_cancel {
 		}
 	}
 	return 1 unless($sent);
-	$socket->send("\n")
+	&client_send("\n")
 }
 
 sub cmd_remove {
 	&validate_jobs();
 	return '' unless(&openclient());
-	return '' unless($socket->send("remove\n$cancel\n" . join(' ', @ARGV)));
-	$socket->recv(my $failed, $len);
+	return '' unless(&client_send("remove\n$cancel\n" . join(' ', @ARGV)));
+	&client_recv(my $failed, $timeout);
 	my @fail = split(/\s+/, $failed);
 	if(@fail) {
 		$exitstatus = 1;
@@ -402,8 +403,8 @@ sub cmd_remove {
 sub cmd_insert {
 	&validate_jobs();
 	return '' unless(&openclient());
-	return '' unless($socket->send("insert\n$destjob\n" . join(' ', @ARGV)));
-	$socket->recv(my $failed, $len);
+	return '' unless(&client_send("insert\n$destjob\n" . join(' ', @ARGV)));
+	&client_recv(my $failed, $timeout);
 	my @fail = split(/\s+/, $failed);
 	if(@fail) {
 		$exitstatus = 1;
@@ -430,6 +431,25 @@ sub openclient {
 	''
 }
 
+sub client_recv {
+	my $tout = $_[1];
+	my $select = IO::Select->new($socket);
+	if(defined($tout) && $tout && !$select->can_read($tout)) {
+		&error("timeout when reading socket");
+		&closeclient(1);
+		exit(7)
+	}
+	unless(defined($socket->recv($_[0], $len))) {
+		&error("cannot receive from socket: $!");
+		&closeclient(1);
+		exit(7)
+	}
+}
+
+sub client_send {
+	defined($socket->send($_[0]))
+}
+
 sub closeclient {
 	return 1 unless(defined($socket));
 	my $ret = ($socket->close());
@@ -446,8 +466,8 @@ sub runner {
 	for my $a (@ARGV) {
 		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
 			return '' unless(&openclient());
-			return '' unless($socket->send("$send$i"));
-			$socket->recv(my $reply, $len);
+			return '' unless(&client_send("$send$i"));
+			&client_recv(my $reply, $timeout);
 			$reply =~ s/^(\d*)\n?//;
 			my $job = $1;
 			if($job eq '0') {
@@ -458,7 +478,7 @@ sub runner {
 				last
 			}
 			if($runmode ne 'bg') {
-				$socket->recv(my $status, $len);
+				&client_recv(my $status, '');
 				$status = $cancel
 					unless(&is_nonnegative($status));
 				if($status) {
@@ -476,8 +496,9 @@ sub runner {
 sub cancel_job {
 	&no_signals();
 	&closeclient(1);
-	&openclient(1) && ($socket->send("cancel\n$cancel\n$destjob"))
-		&& $socket->recv(my $reply, $len) && $socket->send("\n");
+	&openclient(1) && (&client_send("cancel\n$cancel\n$destjob"))
+		&& &client_recv(my $reply, $timeout)
+		&& &client_send("\n");
 	exit($cancel)
 }
 
@@ -529,17 +550,19 @@ sub join_quoted {
 }
 
 sub fatal {
-	print(STDERR "fatal: ", join("\n" . (' ' x 7), @_), "\n");
+	print(STDERR "$name: fatal: ",
+		join("\n" . (' ' x (length($name) + 9)), @_), "\n");
 	exit(1)
 }
 
 sub error {
-	print(STDERR "error: ", join("\n" . (' ' x 7), @_), "\n");
-	''
+	print(STDERR "$name: error: ",
+		join("\n" . (' ' x (length($name) + 9)), @_), "\n")
 }
 
 sub warning {
-	print(STDERR "warning: ", join("\n" . (' ' x 9), @_), "\n")
+	print(STDERR "$name: warning: ",
+		join("\n" . (' ' x (length($name) + 11)), @_), "\n")
 }
 
 sub is_nonnegative {
@@ -560,6 +583,7 @@ GetOptions(
 	'version|V', \&version,
 	'port|P=i', \$port,
 	'addr|A=s', \$addr,
+	'timeout|t=i', \$timeout,
 	'exit|e=i', \$cancel,
 	'job|j=i', \$destjob,
 	'quiet|q+', \$quiet
@@ -567,6 +591,7 @@ GetOptions(
 
 # Postprocess options:
 
+&fatal("illegal timeout $timeout") unless(&is_nonnegative($timeout));
 &fatal("illegal port $port") unless(&is_nonnegative($port) && $port <= 0xFFFF);
 &fatal("illegal --exit $cancel")
 	unless(&is_nonnegative($cancel) && $cancel <= 0xFF);

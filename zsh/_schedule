@@ -8,6 +8,7 @@ service_opts=(
 '(1 * -)'{'--version','-V'}'[print version and exit]'
 {'(--port)-P+','(-P)--port='}'[PORT (set TCP port)]:port:(127.0.0.1)'
 {'(--addr)-A+','(-A)--addr='}'[ADDR (set address)]:port:(8471)'
+{'(--timeout)-t+','(-t)--timeout='}'[SECONDS (set timeout)]:seconds:(10)'
 )
 case ${service} in
 (*server)
