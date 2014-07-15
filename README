@@ -3,77 +3,203 @@ This project is under the BSD license.
 
 schedule - script to schedule jobs in a multiuser multitasking environment
 
-Once you started the server with schedule-server (which might be done by
-an init-script), you can queue commands for later execution by using
+What is this project and what it is good for?
+=============================================
 
-	schedule queue command [arguments]
+Suppose you have some long-running tasks which you want to start
+before you leave the machine for the night (or for going to lunch),
+for instance the command "emerge -NDu @world", a kernel compilation script
+"kernel -f", and a command to build special kernel modules
+"emerge -1O @module-rebuild".
 
-This can be called with various users and even in chroots.
-Instead of running the queued command immediately, this is postponed until
-you start a control "script".
+Normally, what you would do is probably to start these tasks in a shell as
 
-In the simplest case, this control "script" can be just the command
+	emerge -NDu @world && kernel -f && emerge -1O @module-rebuild \
+		&& shutdown -h now
 
+Now suppose that you started the above line and realize after an hour
+that you want to do something else before the shutdown -h now.
+For instance, you want to do the same commands also in a chroot.
+Now if you typed the above line, you are lost, in a sense:
+You would have to stop the lengthy "emerge -NDu @world" command only to
+change this command line.
+
+Therefore, it is better to use a scheduler for jobs.
+A rather primitive such "scheduler" is my "starter" script from
+
+	https://github.com/vaeth/starter/
+
+but the latter is lacking a lot of possibilities which are sometime needed.
+It is exactly the purpose of this project to fill this gap.
+
+Let us remark that with projects you can also schedule jobs running in a
+chroot (say) which normally is not possible in a command line like the above.
+
+With this project, you can instead of running the above command line
+do the following.
+
+0. unless you started the server in an init file, you run
+	schedule-server &
+
+1. You run
+	schedule s emerge -NDu @world
+   This is a shortcut for
+	schedule start emerge -NDu @world
+   It immediately starts the "emerge -NDu @world" so that you will not
+   loose time when doing the next steps.
+   Simultaneously, it will "queue" the job "emerge -NDu @world".
+   What this means will become clear in step 5.
+
+2. In a different shell you run
+	schedule q kernel -f
+   This is a shortcut for
+	schedule queue kernel -f
+   It means that "kernel -f" is not started immediately,
+   but it will be prepared for scheduling in step 5.
+
+3. In another shell run
+	schedule q emerge -1O @module-rebuild
+
+4. In yet another shell run
+	schedule q shutdown -h now
+
+5. Finally, we run in yet another shell:
+	schedule exec
+
+The latter instructs schedule to run all queued jobs sequentially,
+stopping if the first job returns with a nonzero exit status.
+(If we would not want the stopping, we could have used instead:
 	schedule run
+This will run all jobs sequentially, even if they return a nonzero exit status;
+The exit status of "schedule run" will be the maximum of the all others,
+that is the command "succeeds" if all jobs succeeded.)
 
-which will sequentially execute all queued commands.
-If you use "exec" instead of "run", the execution will be stopped in the
-moment when one process returns a nonzero exit status.
-At any time you can queue new commands to the end of the list.
-So far, this is essentially the functionality of the "starter" script from
-	https://github.com/vaeth/schedule/
+Now if we suddenly decide that something else must be done, e.g.
+the same jobs should be queued in a chroot, we just press Ctrl-C in the
+shell of 5, queue further commands and run "schedule exec" again.
+Alternatively, we could have used
 
-However, there are much more possibilities:
-You can display the current list with
+	schedule --job -1 q something
+
+to insert our new job "something" one step before the end of the queue.
+If we have inserted a job at the wrong place, we can sort the queue
+differently. For instance,
+
+	schedule --job=-1 insert :3
+
+will shift the first three jobs in the queue one entry before the end of
+the queue. Of course, we can also remove jobs from the list
+(in which case the corresponding "schedule queue ..." command will return).
+If you lost an overview of the queued jobs,
 
 	schedule list
 
-Even while the above jobs are running, you can  queue new commands also in
-the middle of the list with the --job=... option.
-You can order the current list differently using "schedule insert".
-For instance,
+will show you the jobs with their numbers.
 
-	schedule --job=1 insert -2:
+Instead of sequential executing, one can also start or more jobs in
+parallel, wait for other jobs, build dependencies on the success of
+certain jobs etc. To stay with the above example, suppose that you have
+scheduled the jobs
 
-while shift the last two jobs to the beginning of the list.
+1. emerge -NDu @world
+2. kernel -f
+3. emerge -1O @module-rebuild
+4. shutdown -h now
+5. emerge -NDu @world (in a chroot)
+6. kernel -f (in a chroot)
+7. emerge -1O @module-rebuild (in a chroot)
 
-Moreover, you can start jobs in parallel. In the simplest case,
+Intuitively, there are the dependencies 1->2->3, 5->6->7, and 3,7->4.
+To honour these dependencies you can write a tiny shell "script" (in
+this case in a single line) instead of using "schedule exec":
 
-	schedule parallel
+( schedule exec 1:3; schedule-exec 5:7; schedule wait 3 7 && schedule run 4 )
 
-will just run all queued jobs in parallel and return when they are finished.
-You can also return immediately:
+or, equivalently,
 
-	schedule bg
+( schedule exec 1:3; schedule-exec 5:7; schedule exec 1:3 5:7 4)
 
-and wait later on:
+Note that jobs are never executed twice. For instance, the above
+"schedule exec 1:3" will not start the first job again (which in the
+above example is already running and maybe possibly finished meanwhile);
+more drastically the last "schedule exec" will not restart any job again
+which has already been run, but only start the remaining job 4 if the
+former ones succeeded.
 
-	schedule wait
+You can also run jobs in parallel. For instance,
 
-However, all exit status values correspond to those of the jobs (the largest
-exit status counts if several jobs are involved). Hence, you can write
-ad-hoc "shell scripts" controlling the jobs, like e.g.
+	schedule parallel 1 5
 
-	schedule run 1 && schedule bg 2:4 && schedule wait :3 && schedule run
+would start jobs 1 and 5 in parallel and return when both are finished
+(exit status is as for "schedule run", that is, it tells you whether
+all jobs succeeded).
 
-This will first run job 1, when this is successfully finished start 2, 3, 4,
-and once 2 and 3 are successfully finished start all remaining jobs
-simultaneously.  Note that you can break the above command (with Ctrl-C) and
-run a different one without stopping the jobs already running.
+Of course, you can also return immediately:
+
+	schedule bg 1 5
+
+starts jobs 1 and 5 in parallel and returns. You can wait for their end with
+
+	schedule wait 1 5
 
 For further details on the various commands and options, use
 
 	schedule man
 
-REQUIREMENTS
+
+Security considerations: Global vs. Local Servers
+=================================================
+
+In the above example, we assumed that you are root and that you are the
+only user on the machine: In this case you can just run schedule-server
+in an init-file. The server will use a TCP socket for communicating.
+
+However, you should be aware that everybody who can access the TCP socket
+can start your tasks!
+
+This is intentional so that you can also queue tasks as different users.
+It is not really a security risk, since users can only start e.g. a
+task of root if root has queued this task before.
+However, you should always be aware that a possible attacker might
+change the order of you tasks.  For instance, in the above example,
+the attacker might be able to shutdown the machine which may be undesirable.
+
+You can avoid this problem by using a file socket instead of a TCP socket:
+To do this, you must start the server with the option -l, and also
+every schedule command must use the option -l.
+In this case, only users who can access this file are able to modify the tasks.
+
+The disadvantage of this is that you are now longer able to schedule tasks
+of all users, and also in a chroot you have to make sure that you can
+access the socket file (for instance by using mount --bind into the chroot).
+
+As usual, you decide between security and convenience,
+that is starting schedule-server -l (secure) against schedule-server.
+
+It is recommended to make your choice once and to write an alias or a
+shell script to call "schedule" with the corresponding options:
+Note that the options of "schedule" and "schedule-server" concerning
+the communication method must be the same.
+
+Of course, nothing prevents you from starting a global server and a local
+server simultaneously and to mix "global" commands with local (and possibly
+security critical) tasks: You only have to be aware to use always the
+correct options (-l or -t) for the corresponding schedule commands.
+
+Actually you can even have several TCP servers running (using different ports)
+and several "local" servers (using different socket files).
+
+
+Requirements
 ============
 
-You need a multitasking system with POSIX TCP Sockets - any Linux flavour
+You need a multitasking system with TCP Sockets and/or Unix Domain sockets
+(for access over a port or file, respectively). Any Linux flavour
 will do - and a not too ancient version of perl. (Practically any full
-perl-5 installation contains the required libraries in its core.)
+Perl 5 installation contains the required libraries in its core.)
 
 
-INSTALLATION
+Installation
 ============
 
 If you are a gentoo user, you can just emerge schedule from the mv overlay.

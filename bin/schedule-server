@@ -2,15 +2,17 @@
 use strict;
 use warnings;
 use integer;
-use Pod::Usage;
+use File::Path qw(make_path);
+use File::Spec;
 use Getopt::Long;
 use IO::Select;
-use IO::Socket;
+use IO::Socket; # INET or UNIX, depending on user's choice
+use Pod::Usage;
 
 my $name = 'schedule-server';
 
 sub version {
-	print("$name 0.3\n");
+	print("$name 0.4\n");
 	exit(0)
 }
 
@@ -25,39 +27,114 @@ schedule-server - server for the schedule client; schedule man for details
 =item B<schedule-server> [options]
 
 Start server for the B<schedule> command.
-Use option -k if you start it as a user (which is completely safe
-if you are not running it from a init-script).
-Otherwise, for security reasons, it is attempted to dropped permissions
-to user/group nobody (or uid/gid 65534 as a fallback),
+Use B<schedule --help> or B<schedule --man> for a brief help or
+verbose usage instructions, respectively.
 
 =back
+
+=head1 DESCRIPTION
+
+This is a daemon which needs to run if the B<schedule> command shall be used.
+(Versions of the daemon and of the B<schedule> command need to match.)
+It can be started as a user or as root - it only needs permissions to setup a
+TCP port or a unix domain socket, depending on the communication type
+you choose. Only in special occassions it emits diagnostic messages on STDERR.
+Note that this daemon does not background itself and does not generate a
+PID file: Use a command line like "schedule-server &" or a script like
+start-stop-daemon if you want that.
+It should be completely safe to run this daemon as root, but to limit the
+effect of unforeseen bugs, for security reasons, if the effective user id is 0,
+this daemon tries to change its permissions to user and group "nobody".
+If the user/group cannot be found, the id 65534 is used instead.
+
+By default, the daemon uses a TCP socket on a local port for communication.
+Note that this means that every user on the local machine can communicate
+with the server and list/start/remove/change the order of queued commands
+of all users using the same daemon. This is intentional, and you should be
+aware of the security risks if you use this daemon globally.
+
+If you do not want this, you can run this daemon locally, communicating by a
+file (unix domain socket). In this case, you will usually run the daemon
+locally as a user and specify the option B<--local>
+(and/or B<--file>, B<--umask>).
+It is recommended in this case, to setup an alias or a shell script
+to call B<schedule> always with the same B<--local> or B<--file> option, too.
 
 =head1 OPTIONS
 
 =over 8
 
+=item B<--tcp> or B<-t>
+
+Use a tcp socket (port) for IPC with the client(s). This is the default.
+
+=item B<--local> or B<-l>
+
+Use a unix domain socket (file) for IPC with the client(s).
+
+=item B<--file=>I<file> or B<-f> I<file>
+
+Use I<file> as a unix domain socket filename for IPC.
+The default is B<${TMPDIR}/schedule-${USER}/server>.
+All parent directories are created if they do not exist.
+This option implies B<--local> (unless overridden later on).
+
+=item B<--umask>I<umask> or B<-m> I<umask>
+
+Use this umask for creating directories and/or unix domain socket file.
+The argument is a number; prepend "0" to specify that it is octal.
+Default is 0077. It may be a security risk to change this!
+
+=item B<--skip-check> or B<-S>
+
+Do not change ownership of the parent directory of I<file>.
+Normally, this is checked since it can be a security risk if this is
+not owned by a trusted user.
+Do not use this option unless you know what you are doing!
+
 =item B<--port=>I<port> or B<-P> I<port>
 
-Use port number I<port> for interprocess communication.
-The default port is B<8471>.
+Use port number I<port>; default is B<8471>.
+This option implies B<--tcp> (unless overridden later on).
 
 =item B<--addr=>I<addr> or B<-A> I<addr>
 
-Bind/connect to I<addr>. The default is 127.0.0.1 (localhost only).
+Bind to I<addr>. The default is 127.0.0.1 (localhost only).
+This option implies B<--tcp> (unless overridden later on).
 
 =item B<--keep-permissions> or B<-k>
 
-Do not make any attempt to change user or group permissions.
-Use this option if you start the server as a user or if you use some other
-mechanism in a startup file to change the permissions.
-Note that this program does nothing else but to read/write to the specified
-a TCP port, so any permissions which allow to do this are sufficient.
+Do not try to drop permissions, even if started as root.
+It is equivalent to specify B<--no-change-user> and B<--no-change-group>.
+
+=item B<--change-permission> or B<-K>
+
+Try to drop permissions, even if not started as root.
+It is equivalent to specify B<--change-user> and B<--change-group>.
+
+=item B<--no-change-user> or B<-n>
+
+Try to keep permissions of user, independently of how the group is treated.
+
+=item B<--no-change-group> or B<-N>
+
+Try to keep permissions of group (and associated groups),
+ndependently of how the the user is treated.
+
+=item B<--change-user> or B<-c>
+
+Try to drop permissions of user, independently of how the group is treated.
+
+=item B<--change-group> or B<-C>
+
+Try to drop permissions of group (and associated groups),
+independently of how the the user is treated.
 
 =item B<--user=>I<user> or B<-u> I<user>
 
 Drop permissions to user I<user> instead of B<nobody>.
 
-=item B<--group=>I<group> or B<-u> I<group>
+=item B<--group=>I<group> or B<-g> I<group>
 
 Drop permissions to group I<group> instead of B<nobody>.
 
@@ -66,18 +143,10 @@ Drop permissions to group I<group> instead of B<nobody>.
 Drop permissions to user with id I<uid> instead of 65534.
 (If this is specified and valid the value of B<--user> is ignored.)
 
-=item B<--gid=>I<gid> or B<-U> I<gid>
+=item B<--gid=>I<gid> or B<-G> I<gid>
 
 Drop permissions to user with id I<gid> instead of 65534.
 (If this is specified and valid the value of B<--group> is ignored.)
-
-=item B<--no-change-user> or B<-n>
-
-Do not attempt to change the user.
-
-=item B<--no-change-group> or B<-N>
-
-Do not attempt to change the group.
 
 =item B<--help> or B<-h>
 
@@ -102,15 +171,19 @@ Martin VE<auml>th E<lt>martin@mvath.deE<gt>
 
 # Default for the Options:
 
+my $timeout = 10;
+my $tcp = 1;
 my $addr = '127.0.0.1';
 my $port = 8471;
-my $timeout = 10;
+my $file = undef;
+my $umask = 0077;
+my $skipcheck = '';
 my $uid = '';
 my $gid = '';
 my $user = 'nobody';
 my $group = 'nobody';
-my $keepuser = '';
-my $keepgroup = '';
+my $keepuser = $<;
+my $keepgroup = $keepuser;
 
 # Global/State variables:
 
@@ -126,17 +199,24 @@ my $socket = undef;
 sub signal_handler {
 	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = sub {1};
 	&send_exit(7);
+	&closeserver();
+	unlink($file) unless($tcp);
 	exit(130);
 }
 
 sub openserver {
-	$socket = new IO::Socket::INET(
+	$socket = ($tcp ? new IO::Socket::INET(
 		LocalAddr => $addr,
 		LocalPort => $port,
-		Type => SOCK_STREAM,
-		Listen => SOMAXCONN,
+		Type => SOCK_STREAM(),
+		Listen => SOMAXCONN(),
 		Reuse => 1
-	);
+	) : new IO::Socket::UNIX(
+		Local => $file,
+		Type => SOCK_STREAM(),
+		Listen => SOMAXCONN(),
+		Reuse => 1
+	));
 	unless(defined($socket)) {
 		&fatal("unable to setup socket: $!");
 		return ''
@@ -166,9 +246,10 @@ sub conn_send {
 }
 
 sub closeserver {
-	return 1 unless(defined($socket) && !($socket->close()));
-	# &fatal("failed to close socket: $!");
-	''
+	my $ret = 1;
+	$ret = ''if(defined($socket) && !($socket->close()));
+	unlink($file) unless($tcp || !(-S $file));
+	$ret
 }
 
 sub serverloop {
@@ -418,7 +499,7 @@ sub my_index {
 }
 
 sub fatal {
-	print(STDERR "$name: fatal: ",
+	print(STDERR "$name: error: ",
 		join("\n" . (' ' x (length($name) + 9)), @_), "\n");
 	exit(1)
 }
@@ -438,6 +519,27 @@ sub is_nonnegative {
 	(defined($i) && ($i =~ /^\d+$/))
 }
 
+sub prepare_file {
+	umask($umask);
+	unless(defined($file)) {
+		my $user = getpwuid($<);
+		$user = $< unless(defined($user) && ($user ne ''));
+		$file = File::Spec->catfile(File::Spec->tmpdir(),
+			'schedule-' . $user, 'server')
+	}
+	my ($vol, $dir) = File::Spec->splitpath($file);
+	$dir = File::Spec->catpath($vol, $dir);
+	return 1 if($dir eq '');
+	(-d $dir) || make_path($dir) || &fatal("cannot create directory $dir");
+	my @stat = lstat($dir);
+	&fatal("cannot find directory $dir") unless(@stat);
+	return 1 if($skipcheck);
+	&fatal("$dir owned by " . $stat[4] . ':' . $stat[5] . ' instead of '
+		. $< . ':' . $(,
+	"This may be a security risk. If it is intentional use option -S")
+		if(($stat[4] != $<) || ($stat[5] != $())
+}
+
 #
 # Now the main program:
 #
@@ -449,15 +551,23 @@ GetOptions(
 	'help|h', sub { pod2usage(1) },
 	'man|?', sub { pod2usage(-verbose => 2) },
 	'version|V', \&version,
-	'port|P=i', \$port,
-	'addr|A=s', \$addr,
-	'timeout|t=i', \$timeout,
+	'tcp|t', \$tcp,
+	'local|l', sub { $tcp = '' },
+	'port|P=i', sub { $tcp = 1; $port = $_[1] },
+	'addr|A=s', sub { $tcp = 1; $addr = $_[1] },
+	'file|f=s', sub { $tcp = ''; $file = $_[1] },
+	'umask|m=s', \$umask,
+	'skip-check|S', \$skipcheck,
+	'timeout|T=i', \$timeout,
 	'uid|U=s', \$uid,
 	'gid|G=s', \$gid,
 	'user|u=s', \$user,
 	'group|g=s', \$group,
+	'change-user|c', sub { $keepuser = '' },
 	'no-change-user|n', \$keepuser,
+	'change-group|C', sub { $keepgroup = '' },
 	'no-change-group|N', \$keepgroup,
+	'change-permissions|K', sub { $keepuser = $keepgroup = '' },
 	'keep-permissions|k', sub { $keepuser = $keepgroup = 1 }
 ) or pod2usage(2);
 
@@ -476,14 +586,10 @@ unless($keepgroup) {
 		}
 	}
 	$) = ($gid);
-	$) = $gid if($! ne '');
-	if($! ne '') {
-		&warning("failed to set egid to $gid: $!")
-	}
+	$) = $gid if($!);
+	&warning("failed to set egid to $gid: $!") if($!);
 	$( = $gid;
-	if($! ne '') {
-		&warning("failed to set gid to $gid: $!");
-	}
+	&warning("failed to set gid to $gid: $!") if($!)
 }
 
 unless($keepuser) {
@@ -499,19 +605,17 @@ unless($keepuser) {
 		}
 	}
 	$> = $uid;
-	if($! ne '') {
-		&warning("failed to set euid to $uid: $!")
-	}
+	&warning("failed to set euid to $uid: $!") if($!);
 	$< = $uid;
-	if($! ne '') {
-		&warning("failed to set uid to $uid: $!")
-	}
+	&warning("failed to set uid to $uid: $!") if($!)
 }
 
 # Postprocess options:
 
 &fatal("illegal timeout $timeout") unless(&is_nonnegative($timeout));
 &fatal("illegal port $port") unless(&is_nonnegative($port) && $port <= 0xFFFF);
+&prepare_file() unless($tcp);
+
 
 # Process arguments:
 

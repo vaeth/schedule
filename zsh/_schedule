@@ -7,19 +7,27 @@ service_opts=(
 '(1 * -)'{'--man','-\\?'}'[show extended help as a manpage]'
 '(1 * -)'{'--version','-V'}'[print version and exit]'
 {'(--port)-P+','(-P)--port='}'[PORT (set TCP port)]:port:(127.0.0.1)'
+{'(--file)-f+','(-f)--file='}'[FILE (use FILE as socket)]:socket:_file "-g*(=)"'
 {'(--addr)-A+','(-A)--addr='}'[ADDR (set address)]:port:(8471)'
-{'(--timeout)-t+','(-t)--timeout='}'[SECONDS (set timeout)]:seconds:(10)'
+{'(--timeout)-T+','(-T)--timeout='}'[SECONDS (set timeout)]:seconds:(10)'
+{'(--tcp --local -l)-t','(-t --local -l)--tcp'}'[use tcp socket (port)]'
+{'(--local --tcp -t)-l','(-l --tcp -t)--local'}'[use unix domain socket (file)]'
 )
 case ${service} in
 (*server)
 	service_opts+=(
+{'(--skip-check)-S','(-S)--skip-check'}'[skip permission check (dangerous!)]'
+{'(--umask)-m+','(-m)--umask='}'[UMASK (set UMASK)]:umask:(0077)'
 {'(--user)-u+','(-u)--user='}'[USER (use USER permissions)]:user name:_users'
 {'(--group)-g+','(-g)--group='}'[GROUP (use GROUP permissions)]:group name:_groups'
 {'(--uid --user -u)-U+','(-u --user -u)--uid='}'[UID (use UID permissions)]:user id:(65534)'
 {'(--gid --group -g)-G+','(-G --group -g)--gid='}'[GID (use GID permissions)]:group id:(65534)'
-{'(-n --user -u --uid -U)--no-change-user','(--no-change-user --user -u --uid -U)-n'}'[do not change user permissions]'
-{'(-N --group -g --gid -G)--no-change-group','(--no-change-group --group -g --gid -G)-N'}'[do not change group permissions]'
-{'(-k --user -u --uid -U --group -g --gid -G --no-change-user -n)--keep-permissions','(--keep-permissions --user -u --uid -U --group -g --gid -G --no-change-user -n)-k'}'[do not change user/group permissions]'
+{'(--change-user --no-change-user -n)-c','(-c --no-change-user -n)--change-user'}'[change user permissions]'
+{'(--change-group --no-change-group -N)-C','(-C --no-change-group -N)--change-group'}'[change group permissions]'
+{'(--change-permissions --keep-permissions -k --change-user -c --change-group -C)-K','(-K --keep-permissions -k --change-user -c --change-group -C)--change-permissions'}'[change user/group permissions]'
+{'(--no-change-user --user -u --uid -U)-n','(-n --user -u --uid -U)--no-change-user'}'[do not change user permissions]'
+{'(--no-change-group --group -g --gid -G)-N','(-N --group -g --gid -G)--no-change-group'}'[do not change group permissions]'
+{'(--keep-permissions --change-permissions -K --user -u --uid -U --group -g --gid -G --no-change-user -n)-k','(-k --change-permissions -K --user -u --uid -U --group -g --gid -G --no-change-user -n)--keep-permissions'}'[do not change user/group permissions]'
 );;
 (*)
 	service_opts+=(

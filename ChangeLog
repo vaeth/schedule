@@ -1,0 +1,18 @@
+# ChangeLog for schedule
+
+*schedule-0.4:
+	Martin Väth <martin at mvath.de>:
+	- Support optionally Unix domain sockets instead of TCP sockets.
+	- Improve README, giving hints about security
+
+*schedule-0.3:
+	Martin Väth <martin at mvath.de>:
+	- Handle timeouts
+
+*schedule-0.2:
+	Martin Väth <martin at mvath.de>:
+	- Startup server as nobody. Fix openrc init
+
+*schedule-0.1:
+	Martin Väth <martin at mvath.de>:
+	- Rebuild from scratch, based on https://github.com/vaeth/starter/

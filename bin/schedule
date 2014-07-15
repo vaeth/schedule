@@ -2,15 +2,16 @@
 use strict;
 use warnings;
 use integer;
-use Pod::Usage;
+use File::Spec;
 use Getopt::Long;
 use IO::Select;
-use IO::Socket;
+use IO::Socket; # INET or UNIX, depending on user's choice
+use Pod::Usage;
 
 my $name = 'schedule';
 
 sub version {
-	print("$name 0.3\n");
+	print("$name 0.4\n");
 	exit(0)
 }
 
@@ -34,6 +35,10 @@ I<command> is one of:
 
 B<run>, B<exec>, B<bg>, B<parallel>, B<wait>, B<list>, B<status>,
 B<cancel>, B<remove>, B<insert>
+
+commands can be shortcut by the shortest sequence which makes them unique.
+For instance, B<q> can be used instead of B<queue>, B<r> instead of B<run>.
+B<s> (despite being non-unique) can be used instead of B<start>.
 
 I<jobs> is either a job numbers or a string of the form I<from>B<:>I<to>
 where I<from> and B<to> may be omitted (and then mean 1 or infinity,
@@ -119,6 +124,31 @@ When both are succesfully finished, B<shutdown -h now> is executed.
 =head1 OPTIONS
 
 =over 8
+
+=item B<--tcp> or B<-t>
+
+Use a tcp socket (port) for IPC with the client(s). This is the default.
+
+=item B<--local> or B<-l>
+
+Use a unix domain socket (file) for IPC with the server.
+
+=item B<--file=>I<file> or B<-f> I<file>
+
+Use I<file> as a unix domain socket filename for IPC.
+The default is B<${TMPDIR}/schedule-${USER}/server>.
+This option implies B<--local> (unless overridden later on).
+
+=item B<--port=>I<port> or B<-P> I<port>
+
+Use port number I<port>; default is B<8471>.
+This option implies B<--tcp> (unless overridden later on).
+
+=item B<--addr=>I<addr> or B<-A> I<addr>
+
+Bind to I<addr>. The default is 127.0.0.1 (localhost only).
+This option implies B<--tcp> (unless overridden later on).
+
 
 =item B<--port=>I<port> or B<-P> I<port>
 
@@ -244,9 +274,11 @@ Martin VE<auml>th E<lt>martin@mvath.deE<gt>
 
 # Default for the Options:
 
+my $timeout = 10;
+my $tcp = 1;
 my $addr = '127.0.0.1';
 my $port = 8471;
-my $timeout = 10;
+my $file = undef;
 my $quiet = 0;
 my $cancel = 0;
 my $destjob = 0;
@@ -418,15 +450,18 @@ sub cmd_insert {
 #
 
 sub openclient {
-	$socket = new IO::Socket::INET(
+	$socket = ($tcp ? new IO::Socket::INET(
 		PeerAddr => $addr,
 		PeerPort => $port,
 		Type => SOCK_STREAM
-	);
+	) : new IO::Socket::UNIX(
+		Peer => $file,
+		Type => SOCK_STREAM()
+	));
 	return 1 if(defined($socket));
 	my ($silence) = @_;
 	&error("unable to setup socket: $!",
-		'maybe you should run first: schedule-server -k &')
+		'maybe you should run first: schedule-server &')
 			unless(defined($silence) && $silence);
 	''
 }
@@ -550,7 +585,7 @@ sub join_quoted {
 }
 
 sub fatal {
-	print(STDERR "$name: fatal: ",
+	print(STDERR "$name: error: ",
 		join("\n" . (' ' x (length($name) + 9)), @_), "\n");
 	exit(1)
 }
@@ -570,6 +605,19 @@ sub is_nonnegative {
 	(defined($i) && ($i =~ /^\d+$/))
 }
 
+sub check_file {
+	unless(defined($file)) {
+		my $user = getpwuid($<);
+		$user = $< unless(defined($user) && ($user ne ''));
+		$file = File::Spec->catfile(File::Spec->tmpdir(),
+			'schedule-' . $user, 'server')
+	}
+	return 1 if(-S $file);
+	&error("no socket $file exists", 'maybe you should run first: ' .
+			&join_quoted('schedule-server', '-f', $file) . ' &');
+	exit(7)
+}
+
 #
 # Now the main program:
 #
@@ -581,9 +629,12 @@ GetOptions(
 	'help|h', sub { pod2usage(1) },
 	'man|?', sub { pod2usage(-verbose => 2) },
 	'version|V', \&version,
-	'port|P=i', \$port,
-	'addr|A=s', \$addr,
-	'timeout|t=i', \$timeout,
+	'tcp|t', \$tcp,
+	'local|l', sub { $tcp = '' },
+	'port|P=i', sub { $tcp = 1; $port = $_[1] },
+	'addr|A=s', sub { $tcp = 1; $addr = $_[1] },
+	'file|f=s', sub { $tcp = ''; $file = $_[1] },
+	'timeout|T=i', \$timeout,
 	'exit|e=i', \$cancel,
 	'job|j=i', \$destjob,
 	'quiet|q+', \$quiet
@@ -595,6 +646,7 @@ GetOptions(
 &fatal("illegal port $port") unless(&is_nonnegative($port) && $port <= 0xFFFF);
 &fatal("illegal --exit $cancel")
 	unless(&is_nonnegative($cancel) && $cancel <= 0xFF);
+&check_file() unless($tcp);
 
 # Process command:
 
