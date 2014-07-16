@@ -1,5 +1,10 @@
 # ChangeLog for schedule
 
+*schedule-0.5:
+	Martin Väth <martin at mvath.de>:
+	- Introduce SCHEDULE_OPTS and SCHEDULE_SERVER_OPTS
+	- Quote newlines correctly
+
 *schedule-0.4:
 	Martin Väth <martin at mvath.de>:
 	- Support optionally Unix domain sockets instead of TCP sockets.

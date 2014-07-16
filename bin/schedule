@@ -11,7 +11,7 @@ use Pod::Usage;
 my $name = 'schedule';
 
 sub version {
-	print("$name 0.4\n");
+	print("$name 0.5\n");
 	exit(0)
 }
 
@@ -123,11 +123,16 @@ When both are succesfully finished, B<shutdown -h now> is executed.
 
 =head1 OPTIONS
 
+The default of the options is taken from the environment variable
+B<SCHEDULE_OPTS> (shell-quoting in that variable is supported).
+
 =over 8
 
 =item B<--tcp> or B<-t>
 
 Use a tcp socket (port) for IPC with the client(s). This is the default.
+This option exists so that you can override an earlier specified
+(e.g. set in B<SCHEDULE>) option B<-l>.
 
 =item B<--local> or B<-l>
 
@@ -550,7 +555,7 @@ sub validate_jobs {
 		return
 	}
 	for my $i (@ARGV) {
-		unless($i =~ /^(\d+|(\d*\:\d*))$/) {
+		unless($i =~ /^(?:\d+|(?:\d*\:\d*))$/) {
 			&fatal("invalid argument: '$i'")
 		}
 	}
@@ -576,12 +581,49 @@ sub join_quoted {
 	my @r;
 	for my $i (@_) {
 		my $a = $i;
-		$a =~ s/\'/\'\\\'\'/go;
+		$a =~ s/\'/\'\\\'\'/g;
 		$a = "'" . $a . "'";
-		$a =~ s/(^|[^\\])\'([\da-zA-Z\_\-\,\.\:\/]*)\'/$1$2/g;
+		$a =~ s/(\A|[^\\])\'(?:[\w\-\,\.\:\/]*)\'/$1$2/gm;
 		push(@r, ($a ne '') ? $a : "''")
 	}
 	return join(' ', @r)
+}
+
+# Split shell-quoted string into words
+
+sub split_quoted {
+	my ($arg) = @_;
+	my @res = ();
+	my $word = undef;
+	my $quoting = '';
+	while($arg ne '') {
+		my $add;
+		if(($arg =~ s/\A([^\"\'\s\\]+)//m) ||
+			($arg =~ s/\A\\(.)//m) || ($arg =~ s/^(\\)$//) ||
+			($arg =~ s/\A\'((?:[^\'])*)\'?//m)) {
+				$add = $1;
+		} elsif($arg =~ s/\A(\s+)//m) {
+			unless($quoting) {
+				if(defined($word)) {
+					push(@res, $word);
+					$word = undef
+				}
+				next
+			}
+			$add = $1
+		} else {
+			$arg =~ s/^\"//;
+			$quoting = !$quoting;
+			next
+		}
+		if(defined($word)) {
+			$word .= $1
+		} else {
+			$word = $1
+		}
+	}
+	push(@res, $word) if(defined($word));
+	@res
 }
 
 sub fatal {
@@ -622,6 +664,13 @@ sub check_file {
 # Now the main program:
 #
 
+if(exists($ENV{'SCHEDULE_OPTS'})) {
+	unshift(@ARGV, &split_quoted($ENV{'SCHEDULE_OPTS'}))
+}
+for my $i (@ARGV) {
+	print "<$i>\n"
+}; exit 0;
+
 # Parse Options:
 
 $Getopt::Long::bundling = 1;
@@ -654,12 +703,12 @@ my $action = shift(@ARGV);
 $action = '' unless(defined($action));
 if($action =~ /^sto/i) {
 	$action = \&cmd_stop_server
-} elsif($action =~ /^(re|d)/i) {
+} elsif($action =~ /^(?:re|d)/i) {
 	$action = \&cmd_remove
 } elsif($action =~ /^r/i) {
 	$runmode = 'run';
 	$action = \&cmd_run
-} elsif($action =~ /^(e|x)/i) {
+} elsif($action =~ /^(?:e|x)/i) {
 	$runmode = 'exec';
 	$action = \&cmd_run
 } elsif($action =~ /^b/i) {

@@ -12,7 +12,7 @@ use Pod::Usage;
 my $name = 'schedule-server';
 
 sub version {
-	print("$name 0.4\n");
+	print("$name 0.5\n");
 	exit(0)
 }
 
@@ -62,11 +62,18 @@ to call B<schedule> always with the same B<--local> or B<--file> option, too.
 
 =head1 OPTIONS
 
+The default of the options is taken from the environment variable
+B<SCHEDULE_SERVER_OPTS> (shell-quoting in that variable is supported).
+If that variable is undefined, the default is taken from the
+environment variable B<SCHEDULE_OPTS>.
+
 =over 8
 
 =item B<--tcp> or B<-t>
 
 Use a tcp socket (port) for IPC with the client(s). This is the default.
+This option exists so that you can override an earlier specified
+(e.g. set in B<SCHEDULE> or B<SCHEDULE_SERVER>) option B<-l>.
 
 =item B<--local> or B<-l>
 
@@ -100,6 +107,9 @@ This option implies B<--tcp> (unless overridden later on).
 =item B<--addr=>I<addr> or B<-A> I<addr>
 
 Bind to I<addr>. The default is 127.0.0.1 (localhost only).
+If you want to liste worldwide, use B<--addr 0.0.0.0> but be aware about
+the security implications: Everybody will be able to start/see/re-order/cancel
+your tasks!
 This option implies B<--tcp> (unless overridden later on).
 
 =item B<--keep-permissions> or B<-k>
@@ -319,7 +329,7 @@ sub serverloop {
 				}
 				last unless(&conn_send($conn, $reply));
 				last unless(&conn_recv($conn, $data, $timeout));
-				last unless($data =~ s/^(cancel)\n?//)
+				last unless($data =~ s/^cancel\n?//)
 			}
 		} elsif(($cmd eq 'list') || ($cmd eq 'status')) {
 			while(1) {
@@ -498,6 +508,43 @@ sub my_index {
 	}
 }
 
+# Split shell-quoted string into words
+
+sub split_quoted {
+	my ($arg) = @_;
+	my @res = ();
+	my $word = undef;
+	my $quoting = '';
+	while($arg ne '') {
+		my $add;
+		if(($arg =~ s/\A([^\"\'\s\\]+)//m) ||
+			($arg =~ s/\A\\(.)//m) || ($arg =~ s/^(\\)$//) ||
+			($arg =~ s/\A\'((?:[^\'])*)\'?//m)) {
+				$add = $1;
+		} elsif($arg =~ s/\A(\s+)//m) {
+			unless($quoting) {
+				if(defined($word)) {
+					push(@res, $word);
+					$word = undef
+				}
+				next
+			}
+			$add = $1
+		} else {
+			$arg =~ s/^\"//;
+			$quoting = !$quoting;
+			next
+		}
+		if(defined($word)) {
+			$word .= $1
+		} else {
+			$word = $1
+		}
+	}
+	push(@res, $word) if(defined($word));
+	@res
+}
+
 sub fatal {
 	print(STDERR "$name: error: ",
 		join("\n" . (' ' x (length($name) + 9)), @_), "\n");
@@ -543,6 +590,12 @@ sub prepare_file {
 #
 # Now the main program:
 #
+
+if(exists($ENV{'SCHEDULE_SERVER_OPTS'})) {
+	unshift(@ARGV, &split_quoted($ENV{'SCHEDULE_SERVER_OPTS'}))
+} elsif(exists($ENV{'SCHEDULE_OPTS'})) {
+	unshift(@ARGV, &split_quoted($ENV{'SCHEDULE_OPTS'}))
+}
 
 # Parse Options:
 

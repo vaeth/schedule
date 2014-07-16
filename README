@@ -29,16 +29,17 @@ A rather primitive such "scheduler" is my "starter" script from
 
 	https://github.com/vaeth/starter/
 
-but the latter is lacking a lot of possibilities which are sometime needed.
-It is exactly the purpose of this project to fill this gap.
-
-Let us remark that with projects you can also schedule jobs running in a
-chroot (say) which normally is not possible in a command line like the above.
-
+where you could just write e.g. "starter emerge -NDu @world",
+"starter kernel -f", "starter emerge -1O @module-rebuild",
+"starter shutdown -h now" in different shells, and the later commands would
+not restart until the former ones have finished (or are stopped with Ctrl-C).
+However, this approach was limited to removing "scheduled" jobs (with Ctrl-C)
+or adding new jobs at the end,
+The current project is an improvement which is much more flexible.
 With this project, you can instead of running the above command line
 do the following.
 
-0. unless you started the server in an init file, you run
+0. unless you started schedule-server in an init file, you run
 	schedule-server &
 
 1. You run
@@ -55,7 +56,7 @@ do the following.
    This is a shortcut for
 	schedule queue kernel -f
    It means that "kernel -f" is not started immediately,
-   but it will be prepared for scheduling in step 5.
+   but it will be "queued" for scheduling in step 5.
 
 3. In another shell run
 	schedule q emerge -1O @module-rebuild
@@ -147,22 +148,24 @@ For further details on the various commands and options, use
 	schedule man
 
 
-Security considerations: Global vs. Local Servers
-=================================================
+Security considerations: Global vs. Local Servers, SCHEDULE_{,SERVER}_OPTS
+==========================================================================
 
 In the above example, we assumed that you are root and that you are the
 only user on the machine: In this case you can just run schedule-server
 in an init-file. The server will use a TCP socket for communicating.
+(Normally on a local socket, but you can even list worldwide you use
+that -h 0.0.0.0).
 
 However, you should be aware that everybody who can access the TCP socket
-can start your tasks!
+can start/see/cancel/re-order all of your tasks!
 
 This is intentional so that you can also queue tasks as different users.
 It is not really a security risk, since users can only start e.g. a
 task of root if root has queued this task before.
 However, you should always be aware that a possible attacker might
 change the order of you tasks.  For instance, in the above example,
-the attacker might be able to shutdown the machine which may be undesirable.
+the attacker might be able to shutdown the machine whenever he wants.
 
 You can avoid this problem by using a file socket instead of a TCP socket:
 To do this, you must start the server with the option -l, and also
@@ -176,10 +179,17 @@ access the socket file (for instance by using mount --bind into the chroot).
 As usual, you decide between security and convenience,
 that is starting schedule-server -l (secure) against schedule-server.
 
-It is recommended to make your choice once and to write an alias or a
-shell script to call "schedule" with the corresponding options:
-Note that the options of "schedule" and "schedule-server" concerning
-the communication method must be the same.
+To simplify setting an option like "-l" globally for every call to schedule
+and schedule-server, schdule supports the variable SCHEDULE_OPTS: Just
+	export SCHEDULE_OPTS=-l
+and all of your future calls of schedule and schedule-server will use the
+local file. (You can manually override this predefined option by specifying
+the opposite option -t explicitly.)
+Note that the above specified option takes effect in all schedule commands
+as well as in schedule-server. If you want to specify additional options,
+you must correspondingly export SCHEDULE_SERVER_OPTS. (The latter
+overrides SCHEDULE_OPTS, that is, if you set it you probably want to include
+the value of SCHEDULE_OPTS, too.)
 
 Of course, nothing prevents you from starting a global server and a local
 server simultaneously and to mix "global" commands with local (and possibly
@@ -187,15 +197,16 @@ security critical) tasks: You only have to be aware to use always the
 correct options (-l or -t) for the corresponding schedule commands.
 
 Actually you can even have several TCP servers running (using different ports)
-and several "local" servers (using different socket files).
+and several "local" servers (using different socket files): Ports, hosts,
+filenames etc. can all be set by various options.
 
 
 Requirements
 ============
 
 You need a multitasking system with TCP Sockets and/or Unix Domain sockets
-(for access over a port or file, respectively). Any Linux flavour
-will do - and a not too ancient version of perl. (Practically any full
+(for usage with -t or -l, respectively). Any Linux flavour will do -
+and a not too ancient version of perl. (Practically any full
 Perl 5 installation contains the required libraries in its core.)
 
 
