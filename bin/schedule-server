@@ -12,7 +12,7 @@ use Pod::Usage;
 my $name = 'schedule-server';
 
 sub version {
-	print("$name 0.5\n");
+	print("$name 0.6\n");
 	exit(0)
 }
 
@@ -197,7 +197,6 @@ my $keepgroup = $keepuser;
 
 # Global/State variables:
 
-my $len = 0x7FFFFFFF;
 my $joblist = [];
 my $unique = 0;
 my $socket = undef;
@@ -238,12 +237,14 @@ sub openserver {
 sub conn_recv {
 	my $conn = shift;
 	my $tout = $_[1];
+	my $len = $_[2];
 	my $select = IO::Select->new($conn);
 	if(defined($tout) && $tout && !$select->can_read($tout)) {
 		&error("timeout when reading socket");
 		return ''
 	}
-	unless(defined($conn->recv($_[0], $len))) {
+	unless(defined($conn->recv($_[0],
+		(&is_nonnegative($len) && length($len) < 9) ? $len : 0x2000))) {
 		&error("cannot receive from socket: $!");
 		return ''
 	}
@@ -267,14 +268,15 @@ sub serverloop {
 		my $will_close = 1;
 		my $data;
 		$data = '' unless(&conn_recv($conn, $data, $timeout));
-		$data =~ s/^([^\n]*)\n?//;
+		$data =~ s{^([^\n]*)\n?}{};
 		my $cmd = (defined($1) ? $1 : '');
 		if(($cmd eq 'queue') || ($cmd eq 'start')) {
-			$data =~ s/^([+-]?\d*)\n//;
-			my $index = &my_index($2);
+			$data =~ s{^([+-]?\d*)\n}{};
+			my $index = &my_index($2, 1);
 			my $stat = (($cmd eq 'start') ? '' : undef);
 			++$unique;
 			&conn_send($conn, $unique);
+			&conn_recv($conn, $data, $timeout, $data);
 			splice(@$joblist, $index, 0, [$conn, $data, $stat, $unique, []]);
 			$will_close = '' unless(defined($stat))
 		} elsif(($cmd eq 'run') || ($cmd eq 'bg') || ($cmd eq 'wait')) {
@@ -303,7 +305,7 @@ sub serverloop {
 				}
 			}
 		} elsif($cmd eq 'end') {
-			$data =~ s/^([^\n]*)\n//;
+			$data =~ s{^([^\n]*)\n}{};
 			my $u = (defined($1) ? $1 : '');
 			for my $j (@$joblist) {
 				if(&get_unique($j) eq $u) {
@@ -316,8 +318,8 @@ sub serverloop {
 				}
 			}
 		} elsif($cmd eq 'cancel') {
-			while(1) {
-				$data =~ s/^(\d+)\n//;
+			while() {
+				$data =~ s{^(\d+)\n}{};
 				my $stat = (defined($1) ? $1 : 0);
 				my $index = &my_index($data);
 				my $reply = &indexname($index);
@@ -329,28 +331,35 @@ sub serverloop {
 				}
 				last unless(&conn_send($conn, $reply));
 				last unless(&conn_recv($conn, $data, $timeout));
-				last unless($data =~ s/^cancel\n?//)
+				last unless($data =~ s{^cancel\n?}{})
 			}
 		} elsif(($cmd eq 'list') || ($cmd eq 'status')) {
-			while(1) {
+			while() {
 				my $i = &my_index($data);
 				my $reply = &indexname($i);
+				my $reply2 = undef;
 				if($reply ne '0') {
 					my $job = $joblist->[$i];
 					my $stat = &get_status($job);
 					$stat = (defined($stat) ? $stat : '-');
 					$reply .= "\n$stat";
-					$reply .= "\n" . &get_cmd($job)
-						if($cmd eq 'list')
+					if($cmd eq 'list') {
+						$reply2 = &get_cmd($job);
+						$reply .= "\n" . length($reply2)
+					}
 				}
 				last unless(&conn_send($conn, $reply));
+				if(defined($reply2)) {
+					last unless(&conn_recv($conn, my $dummy, $timeout));
+					last unless(&conn_send($conn, $reply2))
+				}
 				last unless(&conn_recv($conn, $data, $timeout));
-				last unless($data =~ s/^(list|status)\n?//);
+				last unless($data =~ s{^(list|status)\n?}{});
 				$cmd = $1
 			}
 		} elsif($cmd eq 'insert') {
-			$data =~ s/([^\n]*\n)//;
-			my $index = &my_index($1);
+			$data =~ s{([^\n]*\n)}{};
+			my $index = &my_index($1, 1);
 			my @insert = ();
 			for my $i (&unique_indices($data)) {
 				push(@insert, $joblist->[$i]);
@@ -368,7 +377,7 @@ sub serverloop {
 				push(@$joblist, $j) if(defined($j))
 			}
 		} elsif($cmd eq 'remove') {
-			$data =~ s/^(\d+)\n//;
+			$data =~ s{^(\d+)\n}{};
 			my $stat = (defined($1) ? $1 : 0);
 			my @fail = ();
 			for my $i (&unique_indices($data)) {
@@ -386,7 +395,7 @@ sub serverloop {
 			}
 			&conn_send($conn, join(' ', @fail) . "\n")
 		} elsif($cmd eq 'stop') {
-			$data =~ /^(\d+)/;
+			$data =~ m{^(\d+)};
 			my $stat = (defined($1) ? $1 : 0);
 			my @fail = &send_exit($stat);
 			my $ret = &conn_send($conn, join(' ', @fail) . "\n");
@@ -464,8 +473,8 @@ sub unique_indices {
 	my @ret = ();
 	my ($ind) = @_;
 	$ind = '' unless(defined($ind));
-	for my $name (split(/\s+/, $_[0])) {
-		if($name =~ /^(\d*)\:(\d*)$/) {
+	for my $name (split(qr{\s+}, $_[0])) {
+		if($name =~ m{^(\d*)\:(\d*)$}) {
 			my $i = (($1 eq '') ? 1 : $1);
 			my $end = &my_index($2);
 			for($i = &my_index($i); $i <= $end; ++$i) {
@@ -493,19 +502,25 @@ sub indexname {
 }
 
 # return internal index of array corresponding to $1
+# If second arg is non-null, let 0 count from end of list + 1
 
 sub my_index {
-	my ($arg) = @_;
-	$arg = 0 unless(defined($arg) && ($arg =~ /^[+-]?\d+$/));
+	my ($arg, $end) = @_;
 	my $max = scalar(@$joblist);
+	$arg = 0 unless(defined($arg));
+	if($arg =~ m{^u(.*)$}) {
+		my $u = $1;
+		for(my $i = 0; $i < @$joblist; ++$i) {
+			return $i if(&get_unique($joblist->[$i]) eq $u)
+		}
+		return 0
+	}
+	$arg = 0 unless($arg =~ m{^[+-]?\d+$});
 	return $max if($arg > $max);
 	return ($arg - 1) if($arg > 0);
 	$arg += $max;
-	if($arg < 0) {
-		0
-	} else {
-		$arg
-	}
+	--$arg unless($end);
+	($arg < 0) ? 0 : $arg
 }
 
 # Split shell-quoted string into words
@@ -517,11 +532,11 @@ sub split_quoted {
 	my $quoting = '';
 	while($arg ne '') {
 		my $add;
-		if(($arg =~ s/\A([^\"\'\s\\]+)//m) ||
-			($arg =~ s/\A\\(.)//m) || ($arg =~ s/^(\\)$//) ||
-			($arg =~ s/\A\'((?:[^\'])*)\'?//m)) {
+		if(($arg =~ s{\A([^\"\'\s\\]+)}{}m) ||
+			($arg =~ s{\A\\(.)}{}m) || ($arg =~ s{^(\\)$}{}) ||
+			($arg =~ s{\A\'((?:[^\'])*)\'?}{}m)) {
 				$add = $1;
-		} elsif($arg =~ s/\A(\s+)//m) {
+		} elsif($arg =~ s{\A(\s+)}{}m) {
 			unless($quoting) {
 				if(defined($word)) {
 					push(@res, $word);
@@ -531,7 +546,7 @@ sub split_quoted {
 			}
 			$add = $1
 		} else {
-			$arg =~ s/^\"//;
+			$arg =~ s{^\"}{};
 			$quoting = !$quoting;
 			next
 		}
@@ -563,7 +578,7 @@ sub warning {
 
 sub is_nonnegative {
 	my ($i) = @_;
-	(defined($i) && ($i =~ /^\d+$/))
+	(defined($i) && ($i =~ m{^\d+$}))
 }
 
 sub prepare_file {
@@ -628,7 +643,7 @@ GetOptions(
 
 unless($keepgroup) {
 	unless(&is_nonnegative($gid)) {
-		if($group =~ /^[a-zA-Z0-9]+$/) {
+		if($group =~ m{^\w+$}) {
 			$gid = getgrnam($user);
 			unless(&is_nonnegative($gid)) {
 				&warning("cannot get group id of $group. Falling back to 65534");
@@ -647,7 +662,7 @@ unless($keepgroup) {
 
 unless($keepuser) {
 	unless(&is_nonnegative($uid)) {
-		if($user =~ /^[a-zA-Z0-9]+$/) {
+		if($user =~ m{^\w+$}) {
 			$uid = getpwnam($user);
 			unless(&is_nonnegative($uid)) {
 				&warning("cannot get group id of $group. Falling back to 65534");

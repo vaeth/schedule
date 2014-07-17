@@ -11,7 +11,7 @@ use Pod::Usage;
 my $name = 'schedule';
 
 sub version {
-	print("$name 0.5\n");
+	print("$name 0.6\n");
 	exit(0)
 }
 
@@ -167,8 +167,10 @@ Bind/connect to I<addr>. The default is 127.0.0.1 (localhost only).
 =item B<--job=>I<jobnr> or B<-j> I<jobnr>
 
 If used with B<schedule queue>, it describes where the job should be inserted
-into the queue. The special number B<0> means the end of the list,
-negative number count from the end of the list. The default is B<0>.
+into the queue. The special number B<0> means the end of the list
+(which may be the number of the last running job or one later, depending
+on the selected action); negative number count from the end of the list.
+The default is B<0>.
 
 If used with B<schedule insert>, it describes the first position where
 the listed jobs are to be moved to.
@@ -290,6 +292,7 @@ my $destjob = 0;
 
 # Global/State variables:
 
+my $unique = undef;
 my $len = 0x7FFFFFFF;
 my $runmode = undef;
 my $socket = undef;
@@ -313,9 +316,12 @@ sub cmd_stop_server {
 sub cmd_queue {
 	return '' unless(&openclient());
 	&no_signals();
-	&client_send("$runmode\n$destjob\n" . &join_quoted(@ARGV));
-	&client_recv(my $unique, $timeout);
+	my $cmd = &join_quoted(@ARGV);
+	my $success = &client_send("$runmode\n$destjob\n" . length($cmd));
+	$success = '' unless(&client_recv($unique, $timeout));
 	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = \&cancel_job;
+	$success = '' unless(&client_send($cmd));
+	return '' unless($success);
 	if($runmode eq 'queue') {
 		&client_recv(my $stat, '');
 		unless(defined($stat) && ($stat eq 'run')) {
@@ -325,11 +331,7 @@ sub cmd_queue {
 	}
 	return '' unless(&closeclient());
 	$exitstatus = system(@ARGV);
-	# Sending exitstatus must cause no errors/warnings:
-	&client_send("end\n" . "$unique\n" . "$exitstatus")
-		if(&openclient(1));
-	&closeclient(1);
-	1
+	&send_status($exitstatus)
 }
 
 sub cmd_run {
@@ -357,7 +359,7 @@ sub cmd_list {
 			}
 			return '' unless(&client_send("$send\n$i"));
 			&client_recv(my $reply, $timeout);
-			return '' unless($reply =~ s/^(\d+)\n?//);
+			return '' unless($reply =~ s{^(\d+)\n?}{});
 			my $job = $1;
 			if($job eq '0') {
 				last if($end eq '');
@@ -369,7 +371,7 @@ sub cmd_list {
 			if($quiet) {
 				$stat = $reply
 			} else {
-				$reply =~ s/^([^\n]*)\n//;
+				$reply =~ s{^([^\n]*)\n}{};
 				$stat = $1
 			}
 			if($stat eq '-') {
@@ -378,6 +380,10 @@ sub cmd_list {
 				$stat = 'running'
 			} else {
 				&set_exitstatus($stat)
+			}
+			unless($quiet) {
+				return '' unless(&client_send("\n") &&
+					&client_recv($reply, $timeout, $reply))
 			}
 			if($quiet < 2) {
 				if($quiet) {
@@ -408,11 +414,11 @@ sub cmd_cancel {
 			}
 			return '' unless(&client_send("cancel\n$cancel\n$i"));
 			&client_recv(my $reply, $timeout);
-			my ($job, $stat) = split(/\s+/, $reply);
+			my ($job, $stat) = split(qr{\s+}, $reply);
 			if($job eq '0') {
 				last if($end eq '');
 				$exitstatus = 1;
-				&error("illegal job number $job")
+				&error("illegal job number $i")
 			}
 			if($stat) {
 				$exitstatus = 1;
@@ -429,7 +435,7 @@ sub cmd_remove {
 	return '' unless(&openclient());
 	return '' unless(&client_send("remove\n$cancel\n" . join(' ', @ARGV)));
 	&client_recv(my $failed, $timeout);
-	my @fail = split(/\s+/, $failed);
+	my @fail = split(qr{\s+}, $failed);
 	if(@fail) {
 		$exitstatus = 1;
 		&error('jobs failed to close: ' . join(' ',@fail))
@@ -442,7 +448,7 @@ sub cmd_insert {
 	return '' unless(&openclient());
 	return '' unless(&client_send("insert\n$destjob\n" . join(' ', @ARGV)));
 	&client_recv(my $failed, $timeout);
-	my @fail = split(/\s+/, $failed);
+	my @fail = split(qr{\s+}, $failed);
 	if(@fail) {
 		$exitstatus = 1;
 		&error('jobs failed to close: ' . join(' ',@fail))
@@ -473,13 +479,15 @@ sub openclient {
 
 sub client_recv {
 	my $tout = $_[1];
+	my $len = $_[2];
 	my $select = IO::Select->new($socket);
 	if(defined($tout) && $tout && !$select->can_read($tout)) {
 		&error("timeout when reading socket");
 		&closeclient(1);
 		exit(7)
 	}
-	unless(defined($socket->recv($_[0], $len))) {
+	unless(defined($socket->recv($_[0],
+		(&is_nonnegative($len) && length($len) < 9) ? $len : 0x2000))) {
 		&error("cannot receive from socket: $!");
 		&closeclient(1);
 		exit(7)
@@ -508,7 +516,7 @@ sub runner {
 			return '' unless(&openclient());
 			return '' unless(&client_send("$send$i"));
 			&client_recv(my $reply, $timeout);
-			$reply =~ s/^(\d*)\n?//;
+			$reply =~ s{^(\d*)\n?}{};
 			my $job = $1;
 			if($job eq '0') {
 				if($end ne '') {
@@ -529,6 +537,16 @@ sub runner {
 			return '' unless(&closeclient())
 		}
 	}
+	1
+}
+
+
+sub send_status {
+	# Sending exitstatus must cause no errors/warnings:
+	&client_send("end\n" . "$unique\n" . "$exitstatus")
+		if(&openclient(1));
+	&closeclient(1);
+	1
 }
 
 # Cancel a job (if "schedule queue" is interrupted by a signal):
@@ -536,7 +554,9 @@ sub runner {
 sub cancel_job {
 	&no_signals();
 	&closeclient(1);
-	&openclient(1) && (&client_send("cancel\n$cancel\n$destjob"))
+	#&send_status($cancel);
+	&openclient(1) && &client_send("cancel\n$cancel\n" .
+		(defined($unique) ? "u$unique" : "$destjob"))
 		&& &client_recv(my $reply, $timeout)
 		&& &client_send("\n");
 	exit($cancel)
@@ -555,7 +575,7 @@ sub validate_jobs {
 		return
 	}
 	for my $i (@ARGV) {
-		unless($i =~ /^(?:\d+|(?:\d*\:\d*))$/) {
+		unless($i =~ m{^(?:\d+|(?:\d*\:\d*))$}) {
 			&fatal("invalid argument: '$i'")
 		}
 	}
@@ -563,8 +583,8 @@ sub validate_jobs {
 
 sub start_end {
 	my ($a) = @_;
-	return ($a, $a) if($a =~ /^\d+$/);
-	$a =~ /^(\d*)\:(\d*)$/;
+	return ($a, $a) if($a =~ m{^\d+$});
+	$a =~ m{^(\d*)\:(\d*)$};
 	((($1 eq '') ? 1 : $1), $2)
 }
 
@@ -581,12 +601,12 @@ sub join_quoted {
 	my @r;
 	for my $i (@_) {
 		my $a = $i;
-		$a =~ s/\'/\'\\\'\'/g;
-		$a = "'" . $a . "'";
-		$a =~ s/(\A|[^\\])\'(?:[\w\-\,\.\:\/]*)\'/$1$2/gm;
+		$a =~ s{\'}{\'\\\'\'}g;
+		$a = "'$a'";
+		$a =~ s{(\A|[^\\])\'([\w\-\,\.\:\/]*)\'}{$1$2}gm;
 		push(@r, ($a ne '') ? $a : "''")
 	}
-	return join(' ', @r)
+	join(' ', @r)
 }
 
 # Split shell-quoted string into words
@@ -667,9 +687,6 @@ sub check_file {
 if(exists($ENV{'SCHEDULE_OPTS'})) {
 	unshift(@ARGV, &split_quoted($ENV{'SCHEDULE_OPTS'}))
 }
-for my $i (@ARGV) {
-	print "<$i>\n"
-}; exit 0;
 
 # Parse Options:
 
@@ -701,42 +718,42 @@ GetOptions(
 
 my $action = shift(@ARGV);
 $action = '' unless(defined($action));
-if($action =~ /^sto/i) {
+if($action =~ m{^sto}i) {
 	$action = \&cmd_stop_server
-} elsif($action =~ /^(?:re|d)/i) {
+} elsif($action =~ m{^(?:re|d)}i) {
 	$action = \&cmd_remove
-} elsif($action =~ /^r/i) {
+} elsif($action =~ m{^r}i) {
 	$runmode = 'run';
 	$action = \&cmd_run
-} elsif($action =~ /^(?:e|x)/i) {
+} elsif($action =~ m{^(?:e|x)}i) {
 	$runmode = 'exec';
 	$action = \&cmd_run
-} elsif($action =~ /^b/i) {
+} elsif($action =~ m{^b}i) {
 	$runmode = 'bg';
 	$action = \&cmd_run
-} elsif($action =~ /^p/i) {
+} elsif($action =~ m{^p}i) {
 	$action = \&cmd_parallel
-} elsif($action =~ /^w/i) {
+} elsif($action =~ m{^w}i) {
 	$runmode = 'wait';
 	$action = \&cmd_run
-} elsif($action =~ /^l/i) {
+} elsif($action =~ m{^l}i) {
 	$action = \&cmd_list
-} elsif($action =~ /^stat/i) {
+} elsif($action =~ m{^stat}i) {
 	++$quiet;
 	$action = \&cmd_list
-} elsif($action =~ /^q/i) {
+} elsif($action =~ m{^q}i) {
 	$runmode = 'queue';
 	$action = \&cmd_queue
-} elsif($action =~ /^s/i) {
+} elsif($action =~ m{^s}i) {
 	$runmode = 'start';
 	$action = \&cmd_queue
-} elsif($action =~ /^i/i) {
+} elsif($action =~ m{^i}i) {
 	$action = \&cmd_insert
-} elsif($action =~ /^c/i) {
+} elsif($action =~ m{^c}i) {
 	$action = \&cmd_cancel
-} elsif($action =~ /^m/i) {
+} elsif($action =~ m{^m}i) {
 	pod2usage(verbose => 2)
-} elsif($action =~ /^h|\?/i) {
+} elsif($action =~ m{^h|\?}i) {
 	pod2usage(0)
 }
 pod2usage(2) unless(ref($action) eq 'CODE');

@@ -1,5 +1,13 @@
 # ChangeLog for schedule
 
+*schedule-0.6:
+	Martin Väth <martin at mvath.de>:
+	- Fix bug in signal handling: cancel always correct job
+	- Fix exit status of some commands like "schedule run"
+	- Let 0 be the last job (instead of last job + 1) for
+	  certain commands (run, bg, wait, cancel, list, status)
+	- Send message length for nontrivial tasks
+
 *schedule-0.5:
 	Martin Väth <martin at mvath.de>:
 	- Introduce SCHEDULE_OPTS and SCHEDULE_SERVER_OPTS
