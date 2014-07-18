@@ -11,7 +11,7 @@ use Pod::Usage;
 my $name = 'schedule';
 
 sub version {
-	print("$name 0.6\n");
+	print("$name 0.7\n");
 	exit(0)
 }
 
@@ -375,7 +375,7 @@ sub cmd_list {
 				$stat = $1
 			}
 			if($stat eq '-') {
-				$stat = 'listening'
+				$stat = 'waiting'
 			} elsif($stat eq '') {
 				$stat = 'running'
 			} else {
@@ -690,7 +690,7 @@ if(exists($ENV{'SCHEDULE_OPTS'})) {
 
 # Parse Options:
 
-$Getopt::Long::bundling = 1;
+Getopt::Long::Configure(qw(bundling gnu_compat no_permute));
 GetOptions(
 	'help|h', sub { pod2usage(1) },
 	'man|?', sub { pod2usage(-verbose => 2) },

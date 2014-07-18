@@ -1,5 +1,10 @@
 # ChangeLog for schedule
 
+*schedule-0.7:
+	Martin Väth <martin at mvath.de>:
+	- Do not allow permutation of options with arguments:
+	  This simplifies passing options to commands or negative job numbers
+
 *schedule-0.6:
 	Martin Väth <martin at mvath.de>:
 	- Fix bug in signal handling: cancel always correct job

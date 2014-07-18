@@ -12,7 +12,7 @@ use Pod::Usage;
 my $name = 'schedule-server';
 
 sub version {
-	print("$name 0.6\n");
+	print("$name 0.7\n");
 	exit(0)
 }
 
@@ -614,7 +614,7 @@ if(exists($ENV{'SCHEDULE_SERVER_OPTS'})) {
 
 # Parse Options:
 
-$Getopt::Long::bundling = 1;
+Getopt::Long::Configure(qw(bundling gnu_compat no_permute));
 GetOptions(
 	'help|h', sub { pod2usage(1) },
 	'man|?', sub { pod2usage(-verbose => 2) },
