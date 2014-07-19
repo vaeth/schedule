@@ -2,19 +2,22 @@
 use strict;
 use warnings;
 use integer;
+use Pod::Usage;
 use File::Path qw(make_path);
 use File::Spec;
-use Getopt::Long;
 use IO::Select;
 use IO::Socket; # INET or UNIX, depending on user's choice
-use Pod::Usage;
 
-my $name = 'schedule-server';
-
-sub version {
-	print("$name 0.7\n");
-	exit(0)
+use lib '/usr/share/schedule';
+use FindBin;
+if(defined($FindBin::Bin) && ($FindBin::Bin ne '')) {
+	use lib File::Spec->catdir($FindBin::Bin, File::Spec->updir(), 'lib');
+	use lib File::Spec->catdir($FindBin::Bin, 'lib');
+	use lib $FindBin::Bin
 }
+use Schedule::Helpers qw(/./);
+use Schedule::Connect;
+my $s = Schedule::Connect->new('schedule-server', '0.8');
 
 =head1 NAME
 
@@ -27,7 +30,7 @@ schedule-server - server for the schedule client; schedule man for details
 =item B<schedule-server> [options]
 
 Start server for the B<schedule> command.
-Use B<schedule --help> or B<schedule --man> for a brief help or
+Use B<schedule-server help> or B<schedule-server man> for a brief help or
 verbose usage instructions, respectively.
 
 =back
@@ -63,9 +66,11 @@ to call B<schedule> always with the same B<--local> or B<--file> option, too.
 =head1 OPTIONS
 
 The default of the options is taken from the environment variable
-B<SCHEDULE_SERVER_OPTS> (shell-quoting in that variable is supported).
-If that variable is undefined, the default is taken from the
-environment variable B<SCHEDULE_OPTS>.
+B<SCHEDULE_SERVER_OPTS>; shell-quoting in the value is supported.
+Moreover, (unquoted) environment variable references of the form $VAR
+or ${VAR} in it are (recursively) expanded.
+If B<SCHEDULE_SERVER_OPTS> is undefined, the default is taken from the
+environment variable B<SCHEDULE_OPTS>, according to the same rules.
 
 =over 8
 
@@ -171,7 +176,7 @@ Display extended help as a manpage.
 =head1 COPYRIGHT AND LICENSE
 
 Copyright Martin VE<auml>th.
-This program is under the BSD License.
+This program is under a BSD type License.
 
 =head1 AUTHOR
 
@@ -181,11 +186,6 @@ Martin VE<auml>th E<lt>martin@mvath.deE<gt>
 
 # Default for the Options:
 
-my $timeout = 10;
-my $tcp = 1;
-my $addr = '127.0.0.1';
-my $port = 8471;
-my $file = undef;
 my $umask = 0077;
 my $skipcheck = '';
 my $uid = '';
@@ -206,60 +206,38 @@ my $socket = undef;
 #
 
 sub signal_handler {
-	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = sub {1};
+	&signals();
 	&send_exit(7);
 	&closeserver();
-	unlink($file) unless($tcp);
+	unlink($s->file()) unless($s->tcp());
 	exit(130);
 }
 
 sub openserver {
-	$socket = ($tcp ? new IO::Socket::INET(
-		LocalAddr => $addr,
-		LocalPort => $port,
+	$socket = ($s->tcp() ? new IO::Socket::INET(
+		LocalAddr => $s->addr(),
+		LocalPort => $s->port(),
 		Type => SOCK_STREAM(),
 		Listen => SOMAXCONN(),
 		Reuse => 1
 	) : new IO::Socket::UNIX(
-		Local => $file,
+		Local => $s->file(),
 		Type => SOCK_STREAM(),
 		Listen => SOMAXCONN(),
 		Reuse => 1
 	));
 	unless(defined($socket)) {
-		&fatal("unable to setup socket: $!");
+		$s->fatal('unable to setup socket: ' . $!);
 		return ''
 	}
-	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = \&signal_handler;
+	&signals(\&signal_handler);
 	1
-}
-
-sub conn_recv {
-	my $conn = shift;
-	my $tout = $_[1];
-	my $len = $_[2];
-	my $select = IO::Select->new($conn);
-	if(defined($tout) && $tout && !$select->can_read($tout)) {
-		&error("timeout when reading socket");
-		return ''
-	}
-	unless(defined($conn->recv($_[0],
-		(&is_nonnegative($len) && length($len) < 9) ? $len : 0x2000))) {
-		&error("cannot receive from socket: $!");
-		return ''
-	}
-	1
-}
-
-sub conn_send {
-	my $conn = shift;
-	defined($conn->send($_[0]))
 }
 
 sub closeserver {
 	my $ret = 1;
-	$ret = ''if(defined($socket) && !($socket->close()));
-	unlink($file) unless($tcp || !(-S $file));
+	$ret = '' if(defined($socket) && !($socket->close()));
+	unlink($s->file()) unless($s->tcp() || !(-S $s->file()));
 	$ret
 }
 
@@ -267,7 +245,7 @@ sub serverloop {
 	while(defined(my $conn = $socket->accept())) {
 		my $will_close = 1;
 		my $data;
-		$data = '' unless(&conn_recv($conn, $data, $timeout));
+		$data = '' unless($s->conn_recv($conn, $data));
 		$data =~ s{^([^\n]*)\n?}{};
 		my $cmd = (defined($1) ? $1 : '');
 		if(($cmd eq 'queue') || ($cmd eq 'start')) {
@@ -275,15 +253,15 @@ sub serverloop {
 			my $index = &my_index($2, 1);
 			my $stat = (($cmd eq 'start') ? '' : undef);
 			++$unique;
-			&conn_send($conn, $unique);
-			&conn_recv($conn, $data, $timeout, $data);
+			$s->conn_send($conn, $unique);
+			$s->conn_recv($conn, $data, undef, $data);
 			splice(@$joblist, $index, 0, [$conn, $data, $stat, $unique, []]);
 			$will_close = '' unless(defined($stat))
 		} elsif(($cmd eq 'run') || ($cmd eq 'bg') || ($cmd eq 'wait')) {
 			my $i = &my_index($data);
 			my $reply = &indexname($i);
 			if($reply eq '0') {
-				&conn_send($conn, $reply);
+				$s->conn_send($conn, $reply);
 			} else {
 				my $job = $joblist->[$i];
 				my $stat = &get_status($job);
@@ -291,13 +269,13 @@ sub serverloop {
 					if($cmd ne 'wait') {
 						$stat = '';
 						&set_status($job, $stat);
-						&conn_send(&get_conn($job), 'run')
+						$s->conn_send(&get_conn($job), 'run')
 					}
 				}
-				&conn_send($conn, $reply);
+				$s->conn_send($conn, $reply);
 				if($cmd ne 'bg') {
 					if(defined($stat) && ($stat ne '')) {
-						&conn_send($conn, $stat)
+						$s->conn_send($conn, $stat)
 					} else {
 						&push_wait($job, $conn);
 						$will_close = ''
@@ -329,8 +307,8 @@ sub serverloop {
 					&send_finish($job, $stat);
 					&set_status($job, $stat)
 				}
-				last unless(&conn_send($conn, $reply));
-				last unless(&conn_recv($conn, $data, $timeout));
+				last unless($s->conn_send($conn, $reply));
+				last unless($s->conn_recv($conn, $data));
 				last unless($data =~ s{^cancel\n?}{})
 			}
 		} elsif(($cmd eq 'list') || ($cmd eq 'status')) {
@@ -348,12 +326,12 @@ sub serverloop {
 						$reply .= "\n" . length($reply2)
 					}
 				}
-				last unless(&conn_send($conn, $reply));
+				last unless($s->conn_send($conn, $reply));
 				if(defined($reply2)) {
-					last unless(&conn_recv($conn, my $dummy, $timeout));
-					last unless(&conn_send($conn, $reply2))
+					last unless($s->conn_recv($conn, my $dummy));
+					last unless($s->conn_send($conn, $reply2))
 				}
-				last unless(&conn_recv($conn, $data, $timeout));
+				last unless($s->conn_recv($conn, $data));
 				last unless($data =~ s{^(list|status)\n?}{});
 				$cmd = $1
 			}
@@ -393,12 +371,12 @@ sub serverloop {
 				my $j = $oldlist->[$i];
 				push(@$joblist, $j) if(defined($j))
 			}
-			&conn_send($conn, join(' ', @fail) . "\n")
+			$s->conn_send($conn, join(' ', @fail) . "\n")
 		} elsif($cmd eq 'stop') {
 			$data =~ m{^(\d+)};
 			my $stat = (defined($1) ? $1 : 0);
 			my @fail = &send_exit($stat);
-			my $ret = &conn_send($conn, join(' ', @fail) . "\n");
+			my $ret = $s->conn_send($conn, join(' ', @fail) . "\n");
 			$ret = '' if(@fail);
 			$ret = '' unless($conn->close());
 			return $ret
@@ -424,14 +402,14 @@ sub send_remove {
 	return 1 if(defined(&get_status($job)));
 	my $ret = 1;
 	my $conn = &get_conn($job);
-	$ret = '' unless(&conn_send($conn, $stat));
+	$ret = '' unless($s->conn_send($conn, $stat));
 	$conn->close() && $ret
 }
 
 sub send_finish {
 	my ($job, $stat) = @_;
 	while(defined(my $conn = &shift_wait($job))) {
-		&conn_send($conn, $stat)
+		$s->conn_send($conn, $stat)
 	}
 }
 
@@ -523,81 +501,19 @@ sub my_index {
 	($arg < 0) ? 0 : $arg
 }
 
-# Split shell-quoted string into words
-
-sub split_quoted {
-	my ($arg) = @_;
-	my @res = ();
-	my $word = undef;
-	my $quoting = '';
-	while($arg ne '') {
-		my $add;
-		if(($arg =~ s{\A([^\"\'\s\\]+)}{}m) ||
-			($arg =~ s{\A\\(.)}{}m) || ($arg =~ s{^(\\)$}{}) ||
-			($arg =~ s{\A\'((?:[^\'])*)\'?}{}m)) {
-				$add = $1;
-		} elsif($arg =~ s{\A(\s+)}{}m) {
-			unless($quoting) {
-				if(defined($word)) {
-					push(@res, $word);
-					$word = undef
-				}
-				next
-			}
-			$add = $1
-		} else {
-			$arg =~ s{^\"}{};
-			$quoting = !$quoting;
-			next
-		}
-		if(defined($word)) {
-			$word .= $1
-		} else {
-			$word = $1
-		}
-	}
-	push(@res, $word) if(defined($word));
-	@res
-}
-
-sub fatal {
-	print(STDERR "$name: error: ",
-		join("\n" . (' ' x (length($name) + 9)), @_), "\n");
-	exit(1)
-}
-
-sub error {
-	print(STDERR "$name: error: ",
-		join("\n" . (' ' x (length($name) + 9)), @_), "\n")
-}
-
-sub warning {
-	print(STDERR "$name: warning: ",
-		join("\n" . (' ' x (length($name) + 11)), @_), "\n")
-}
-
-sub is_nonnegative {
-	my ($i) = @_;
-	(defined($i) && ($i =~ m{^\d+$}))
-}
-
 sub prepare_file {
+	&set_filename();
 	umask($umask);
-	unless(defined($file)) {
-		my $user = getpwuid($<);
-		$user = $< unless(defined($user) && ($user ne ''));
-		$file = File::Spec->catfile(File::Spec->tmpdir(),
-			'schedule-' . $user, 'server')
-	}
-	my ($vol, $dir) = File::Spec->splitpath($file);
+	my ($vol, $dir) = File::Spec->splitpath($s->file());
 	$dir = File::Spec->catpath($vol, $dir);
 	return 1 if($dir eq '');
-	(-d $dir) || make_path($dir) || &fatal("cannot create directory $dir");
+	$s->fatal("cannot create directory $dir")
+		unless((-d $dir) || make_path($dir));
 	my @stat = lstat($dir);
-	&fatal("cannot find directory $dir") unless(@stat);
+	$s->fatal("cannot find directory $dir") unless(@stat);
 	return 1 if($skipcheck);
-	&fatal("$dir owned by " . $stat[4] . ':' . $stat[5] . ' instead of '
-		. $< . ':' . $(,
+	$s->fatal("$dir owned by " . $stat[4] . ':' . $stat[5] .
+		' instead of ' . $< . ':' . $(,
 	"This may be a security risk. If it is intentional use option -S")
 		if(($stat[4] != $<) || ($stat[5] != $())
 }
@@ -607,26 +523,16 @@ sub prepare_file {
 #
 
 if(exists($ENV{'SCHEDULE_SERVER_OPTS'})) {
-	unshift(@ARGV, &split_quoted($ENV{'SCHEDULE_SERVER_OPTS'}))
+	unshift(@ARGV, &env_to_array('SCHEDULE_SERVER_OPTS'))
 } elsif(exists($ENV{'SCHEDULE_OPTS'})) {
-	unshift(@ARGV, &split_quoted($ENV{'SCHEDULE_OPTS'}))
+	unshift(@ARGV, &env_to_array('SCHEDULE_OPTS'))
 }
 
 # Parse Options:
 
-Getopt::Long::Configure(qw(bundling gnu_compat no_permute));
-GetOptions(
-	'help|h', sub { pod2usage(1) },
-	'man|?', sub { pod2usage(-verbose => 2) },
-	'version|V', \&version,
-	'tcp|t', \$tcp,
-	'local|l', sub { $tcp = '' },
-	'port|P=i', sub { $tcp = 1; $port = $_[1] },
-	'addr|A=s', sub { $tcp = 1; $addr = $_[1] },
-	'file|f=s', sub { $tcp = ''; $file = $_[1] },
+$s->get_options(
 	'umask|m=s', \$umask,
 	'skip-check|S', \$skipcheck,
-	'timeout|T=i', \$timeout,
 	'uid|U=s', \$uid,
 	'gid|G=s', \$gid,
 	'user|u=s', \$user,
@@ -637,7 +543,7 @@ GetOptions(
 	'no-change-group|N', \$keepgroup,
 	'change-permissions|K', sub { $keepuser = $keepgroup = '' },
 	'keep-permissions|k', sub { $keepuser = $keepgroup = 1 }
-) or pod2usage(2);
+);
 
 # First, drop permissions if possible:
 
@@ -646,7 +552,7 @@ unless($keepgroup) {
 		if($group =~ m{^\w+$}) {
 			$gid = getgrnam($user);
 			unless(&is_nonnegative($gid)) {
-				&warning("cannot get group id of $group. Falling back to 65534");
+				$s->warning("cannot get group id of $group. Falling back to 65534");
 				$gid = 65534
 			}
 		} else {
@@ -655,9 +561,9 @@ unless($keepgroup) {
 	}
 	$) = ($gid);
 	$) = $gid if($!);
-	&warning("failed to set egid to $gid: $!") if($!);
+	$s->warning("failed to set egid to $gid: $!") if($!);
 	$( = $gid;
-	&warning("failed to set gid to $gid: $!") if($!)
+	$s->warning("failed to set gid to $gid: $!") if($!)
 }
 
 unless($keepuser) {
@@ -665,7 +571,7 @@ unless($keepuser) {
 		if($user =~ m{^\w+$}) {
 			$uid = getpwnam($user);
 			unless(&is_nonnegative($uid)) {
-				&warning("cannot get group id of $group. Falling back to 65534");
+				$s->warning("cannot get group id of $group. Falling back to 65534");
 				$uid = 65534
 			}
 		} else {
@@ -673,17 +579,14 @@ unless($keepuser) {
 		}
 	}
 	$> = $uid;
-	&warning("failed to set euid to $uid: $!") if($!);
+	$s->warning("failed to set euid to $uid: $!") if($!);
 	$< = $uid;
-	&warning("failed to set uid to $uid: $!") if($!)
+	$s->warning("failed to set uid to $uid: $!") if($!)
 }
 
 # Postprocess options:
 
-&fatal("illegal timeout $timeout") unless(&is_nonnegative($timeout));
-&fatal("illegal port $port") unless(&is_nonnegative($port) && $port <= 0xFFFF);
-&prepare_file() unless($tcp);
-
+$s->check_options();
 
 # Process arguments:
 
@@ -691,6 +594,7 @@ pod2usage(2) if(@ARGV);
 
 # Call main functions:
 
+&prepare_file() unless($s->tcp());
 my $exitstatus = ((&openserver() && &serverloop()) ? 0 : 1);
 $exitstatus = 1 unless(&closeserver());
 exit($exitstatus);

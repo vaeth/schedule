@@ -2,18 +2,21 @@
 use strict;
 use warnings;
 use integer;
+use Pod::Usage;
 use File::Spec;
-use Getopt::Long;
 use IO::Select;
 use IO::Socket; # INET or UNIX, depending on user's choice
-use Pod::Usage;
 
-my $name = 'schedule';
-
-sub version {
-	print("$name 0.7\n");
-	exit(0)
+use lib '/usr/share/schedule';
+use FindBin;
+if(defined($FindBin::Bin) && ($FindBin::Bin ne '')) {
+	use lib File::Spec->catdir($FindBin::Bin, File::Spec->updir(), 'lib');
+	use lib File::Spec->catdir($FindBin::Bin, 'lib');
+	use lib $FindBin::Bin
 }
+use Schedule::Helpers qw(/./);
+use Schedule::Connect;
+my $s = Schedule::Connect->new('schedule', '0.8');
 
 =head1 NAME
 
@@ -69,7 +72,7 @@ B<schedule run>
 
 (this example would simply execute all queued jobs sequentially).
 
-head1 EXAMPLE 1
+=head1 EXAMPLE 1
 
 To initialize the whole system you must run eventually B<schedule init>
 (this can be run from your machines init system).
@@ -124,7 +127,9 @@ When both are succesfully finished, B<shutdown -h now> is executed.
 =head1 OPTIONS
 
 The default of the options is taken from the environment variable
-B<SCHEDULE_OPTS> (shell-quoting in that variable is supported).
+B<SCHEDULE_OPTS>; shell-quoting in the value is supported.
+Moreover, (unquoted) environment variable references of the form $VAR
+or ${VAR} in it are (recursively) expanded.
 
 =over 8
 
@@ -271,7 +276,7 @@ exitstatus specified by B<--cancel> (default is B<0>).
 =head1 COPYRIGHT AND LICENSE
 
 Copyright Martin VE<auml>th.
-This program is under the BSD License.
+This program is under a BSD type License.
 
 =head1 AUTHOR
 
@@ -281,11 +286,6 @@ Martin VE<auml>th E<lt>martin@mvath.deE<gt>
 
 # Default for the Options:
 
-my $timeout = 10;
-my $tcp = 1;
-my $addr = '127.0.0.1';
-my $port = 8471;
-my $file = undef;
 my $quiet = 0;
 my $cancel = 0;
 my $destjob = 0;
@@ -293,7 +293,6 @@ my $destjob = 0;
 # Global/State variables:
 
 my $unique = undef;
-my $len = 0x7FFFFFFF;
 my $runmode = undef;
 my $socket = undef;
 my $exitstatus = 0;
@@ -304,10 +303,10 @@ my $exitstatus = 0;
 
 sub cmd_stop_server {
 	return '' unless(&openclient() && &client_send("stop\n$cancel"));
-	&client_recv(my $fail, $timeout);
+	&client_recv(my $fail);
 	unless($quiet) {
 		chomp($fail);
-		&error("jobs failed to close: $fail") if($fail ne '')
+		$s->error("jobs failed to close: $fail") if($fail ne '')
 	}
 	&closeclient();
 	1
@@ -315,23 +314,35 @@ sub cmd_stop_server {
 
 sub cmd_queue {
 	return '' unless(&openclient());
-	&no_signals();
+	&signals();
 	my $cmd = &join_quoted(@ARGV);
 	my $success = &client_send("$runmode\n$destjob\n" . length($cmd));
-	$success = '' unless(&client_recv($unique, $timeout));
-	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = \&cancel_job;
+	$success = '' unless(&client_recv($unique));
+	&signals(\&cancel_job);
 	$success = '' unless(&client_send($cmd));
 	return '' unless($success);
 	if($runmode eq 'queue') {
-		&client_recv(my $stat, '');
+		&client_recv(my $stat, 0);
 		unless(defined($stat) && ($stat eq 'run')) {
 			$exitstatus = (&is_nonnegative($stat) ? $stat : $cancel);
 			return 1
 		}
 	}
 	return '' unless(&closeclient());
-	$exitstatus = system(@ARGV);
-	&send_status($exitstatus)
+	my $sys = system(@ARGV);
+	if($sys < 0) {
+		$s->error('job could not be executed') unless($quiet);
+		$sys = 127
+	} elsif($sys & 127) {
+		$s->error('job died with signal ' . ($sys & 127) .
+			(($sys & 128) ? '' : ' (core dumped)')) unless($quiet);
+		$sys = 127
+	} else {
+		$sys >>= 8;
+		$s->error("exit with status " . $sys) if($sys && !$quiet);
+	}
+	&set_exitstatus($sys);
+	&send_status($sys)
 }
 
 sub cmd_run {
@@ -358,13 +369,13 @@ sub cmd_list {
 				return '' unless(&openclient())
 			}
 			return '' unless(&client_send("$send\n$i"));
-			&client_recv(my $reply, $timeout);
+			&client_recv(my $reply);
 			return '' unless($reply =~ s{^(\d+)\n?}{});
 			my $job = $1;
 			if($job eq '0') {
 				last if($end eq '');
 				&set_exitstatus(1);
-				&error("illegal job number $job");
+				$s->error("illegal job number $job");
 				next
 			}
 			my $stat;
@@ -383,7 +394,7 @@ sub cmd_list {
 			}
 			unless($quiet) {
 				return '' unless(&client_send("\n") &&
-					&client_recv($reply, $timeout, $reply))
+					&client_recv($reply, undef, $reply))
 			}
 			if($quiet < 2) {
 				if($quiet) {
@@ -413,16 +424,16 @@ sub cmd_cancel {
 				return '' unless(&openclient())
 			}
 			return '' unless(&client_send("cancel\n$cancel\n$i"));
-			&client_recv(my $reply, $timeout);
+			&client_recv(my $reply);
 			my ($job, $stat) = split(qr{\s+}, $reply);
 			if($job eq '0') {
 				last if($end eq '');
-				$exitstatus = 1;
-				&error("illegal job number $i")
+				&set_exitstatus(1);
+				$s->error("illegal job number $i")
 			}
 			if($stat) {
-				$exitstatus = 1;
-				&error("job $job failed to close")
+				&set_exitstatus(1);
+				$s->error("job $job failed to close")
 			}
 		}
 	}
@@ -432,28 +443,20 @@ sub cmd_cancel {
 
 sub cmd_remove {
 	&validate_jobs();
-	return '' unless(&openclient());
-	return '' unless(&client_send("remove\n$cancel\n" . join(' ', @ARGV)));
-	&client_recv(my $failed, $timeout);
+	return '' unless(&openclient() &&
+		&client_send("remove\n$cancel\n" . join(' ', @ARGV)) &&
+		&client_recv(my $failed));
 	my @fail = split(qr{\s+}, $failed);
 	if(@fail) {
-		$exitstatus = 1;
-		&error('jobs failed to close: ' . join(' ',@fail))
+		&set_exitstatus(1);
+		$s->error('jobs failed to close: ' . join(' ',@fail))
 	}
 	1
 }
 
 sub cmd_insert {
 	&validate_jobs();
-	return '' unless(&openclient());
-	return '' unless(&client_send("insert\n$destjob\n" . join(' ', @ARGV)));
-	&client_recv(my $failed, $timeout);
-	my @fail = split(qr{\s+}, $failed);
-	if(@fail) {
-		$exitstatus = 1;
-		&error('jobs failed to close: ' . join(' ',@fail))
-	}
-	1
+	&openclient() && &client_send("insert\n$destjob\n" . join(' ', @ARGV))
 }
 
 #
@@ -461,41 +464,30 @@ sub cmd_insert {
 #
 
 sub openclient {
-	$socket = ($tcp ? new IO::Socket::INET(
-		PeerAddr => $addr,
-		PeerPort => $port,
+	$socket = ($s->tcp() ? new IO::Socket::INET(
+		PeerAddr => $s->addr(),
+		PeerPort => $s->port(),
 		Type => SOCK_STREAM
 	) : new IO::Socket::UNIX(
-		Peer => $file,
+		Peer => $s->file(),
 		Type => SOCK_STREAM()
 	));
 	return 1 if(defined($socket));
 	my ($silence) = @_;
-	&error("unable to setup socket: $!",
+	$s->error("unable to setup socket: $!",
 		'maybe you should run first: schedule-server &')
 			unless(defined($silence) && $silence);
 	''
 }
 
 sub client_recv {
-	my $tout = $_[1];
-	my $len = $_[2];
-	my $select = IO::Select->new($socket);
-	if(defined($tout) && $tout && !$select->can_read($tout)) {
-		&error("timeout when reading socket");
-		&closeclient(1);
-		exit(7)
-	}
-	unless(defined($socket->recv($_[0],
-		(&is_nonnegative($len) && length($len) < 9) ? $len : 0x2000))) {
-		&error("cannot receive from socket: $!");
-		&closeclient(1);
-		exit(7)
-	}
+	return 1 if($s->conn_recv($socket, @_));
+	&closeclient(1);
+	exit(7)
 }
 
 sub client_send {
-	defined($socket->send($_[0]))
+	$s->conn_send($socket, @_)
 }
 
 sub closeclient {
@@ -504,7 +496,7 @@ sub closeclient {
 	$socket = undef;
 	return 1 if($ret);
 	my ($silence) = @_;
-	&error("failed to close socket: $!")
+	$s->error("failed to close socket: $!")
 		unless(defined($silence) && $silence);
 	''
 }
@@ -515,18 +507,18 @@ sub runner {
 		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
 			return '' unless(&openclient());
 			return '' unless(&client_send("$send$i"));
-			&client_recv(my $reply, $timeout);
+			&client_recv(my $reply);
 			$reply =~ s{^(\d*)\n?}{};
 			my $job = $1;
 			if($job eq '0') {
 				if($end ne '') {
 					&set_exitstatus(1);
-					&error("illegal job number $job")
+					$s->error("illegal job number $job")
 				}
 				last
 			}
 			if($runmode ne 'bg') {
-				&client_recv(my $status, '');
+				&client_recv(my $status, 0);
 				$status = $cancel
 					unless(&is_nonnegative($status));
 				if($status) {
@@ -557,13 +549,9 @@ sub cancel_job {
 	#&send_status($cancel);
 	&openclient(1) && &client_send("cancel\n$cancel\n" .
 		(defined($unique) ? "u$unique" : "$destjob"))
-		&& &client_recv(my $reply, $timeout)
+		&& &client_recv(my $reply)
 		&& &client_send("\n");
 	exit($cancel)
-}
-
-sub no_signals {
-	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = sub {1}
 }
 
 # Check whether @ARGV are valid job specifications.
@@ -575,9 +563,8 @@ sub validate_jobs {
 		return
 	}
 	for my $i (@ARGV) {
-		unless($i =~ m{^(?:\d+|(?:\d*\:\d*))$}) {
-			&fatal("invalid argument: '$i'")
-		}
+		$s->fatal("invalid argument: '$i'")
+			unless($i =~ m{^(?:\d+|(?:\d*\:\d*))$})
 	}
 }
 
@@ -609,74 +596,12 @@ sub join_quoted {
 	join(' ', @r)
 }
 
-# Split shell-quoted string into words
-
-sub split_quoted {
-	my ($arg) = @_;
-	my @res = ();
-	my $word = undef;
-	my $quoting = '';
-	while($arg ne '') {
-		my $add;
-		if(($arg =~ s/\A([^\"\'\s\\]+)//m) ||
-			($arg =~ s/\A\\(.)//m) || ($arg =~ s/^(\\)$//) ||
-			($arg =~ s/\A\'((?:[^\'])*)\'?//m)) {
-				$add = $1;
-		} elsif($arg =~ s/\A(\s+)//m) {
-			unless($quoting) {
-				if(defined($word)) {
-					push(@res, $word);
-					$word = undef
-				}
-				next
-			}
-			$add = $1
-		} else {
-			$arg =~ s/^\"//;
-			$quoting = !$quoting;
-			next
-		}
-		if(defined($word)) {
-			$word .= $1
-		} else {
-			$word = $1
-		}
-	}
-	push(@res, $word) if(defined($word));
-	@res
-}
-
-sub fatal {
-	print(STDERR "$name: error: ",
-		join("\n" . (' ' x (length($name) + 9)), @_), "\n");
-	exit(1)
-}
-
-sub error {
-	print(STDERR "$name: error: ",
-		join("\n" . (' ' x (length($name) + 9)), @_), "\n")
-}
-
-sub warning {
-	print(STDERR "$name: warning: ",
-		join("\n" . (' ' x (length($name) + 11)), @_), "\n")
-}
-
-sub is_nonnegative {
-	my ($i) = @_;
-	(defined($i) && ($i =~ /^\d+$/))
-}
-
 sub check_file {
-	unless(defined($file)) {
-		my $user = getpwuid($<);
-		$user = $< unless(defined($user) && ($user ne ''));
-		$file = File::Spec->catfile(File::Spec->tmpdir(),
-			'schedule-' . $user, 'server')
-	}
+	$s->default_filename();
+	my $file = $s->file();
 	return 1 if(-S $file);
-	&error("no socket $file exists", 'maybe you should run first: ' .
-			&join_quoted('schedule-server', '-f', $file) . ' &');
+	$s->error("no socket $file exists", 'maybe you should run first: ' .
+		&join_quoted('schedule-server', '-f', $file) . ' &');
 	exit(7)
 }
 
@@ -685,34 +610,23 @@ sub check_file {
 #
 
 if(exists($ENV{'SCHEDULE_OPTS'})) {
-	unshift(@ARGV, &split_quoted($ENV{'SCHEDULE_OPTS'}))
+	unshift(@ARGV, &env_to_array('SCHEDULE_OPTS'))
 }
 
 # Parse Options:
 
-Getopt::Long::Configure(qw(bundling gnu_compat no_permute));
-GetOptions(
-	'help|h', sub { pod2usage(1) },
-	'man|?', sub { pod2usage(-verbose => 2) },
-	'version|V', \&version,
-	'tcp|t', \$tcp,
-	'local|l', sub { $tcp = '' },
-	'port|P=i', sub { $tcp = 1; $port = $_[1] },
-	'addr|A=s', sub { $tcp = 1; $addr = $_[1] },
-	'file|f=s', sub { $tcp = ''; $file = $_[1] },
-	'timeout|T=i', \$timeout,
+$s->get_options(
 	'exit|e=i', \$cancel,
 	'job|j=i', \$destjob,
 	'quiet|q+', \$quiet
-) or pod2usage(2);
+);
 
 # Postprocess options:
 
-&fatal("illegal timeout $timeout") unless(&is_nonnegative($timeout));
-&fatal("illegal port $port") unless(&is_nonnegative($port) && $port <= 0xFFFF);
-&fatal("illegal --exit $cancel")
+$s->check_options();
+$s->fatal("illegal --exit $cancel")
 	unless(&is_nonnegative($cancel) && $cancel <= 0xFF);
-&check_file() unless($tcp);
+&check_file() unless($s->tcp());
 
 # Process command:
 
@@ -751,10 +665,6 @@ if($action =~ m{^sto}i) {
 	$action = \&cmd_insert
 } elsif($action =~ m{^c}i) {
 	$action = \&cmd_cancel
-} elsif($action =~ m{^m}i) {
-	pod2usage(verbose => 2)
-} elsif($action =~ m{^h|\?}i) {
-	pod2usage(0)
 }
 pod2usage(2) unless(ref($action) eq 'CODE');
 $exitstatus = 7 unless(&{$action}());

@@ -28,6 +28,7 @@ case ${service} in
 {'(--no-change-user --user -u --uid -U)-n','(-n --user -u --uid -U)--no-change-user'}'[do not change user permissions]'
 {'(--no-change-group --group -g --gid -G)-N','(-N --group -g --gid -G)--no-change-group'}'[do not change group permissions]'
 {'(--keep-permissions --change-permissions -K --user -u --uid -U --group -g --gid -G --no-change-user -n)-k','(-k --change-permissions -K --user -u --uid -U --group -g --gid -G --no-change-user -n)--keep-permissions'}'[do not change user/group permissions]'
+'1:command:->cmds'
 );;
 (*)
 	service_opts+=(
@@ -41,11 +42,13 @@ esac
 _arguments -C -s -S -A '-*' : $service_opts
 local ret=$?
 case $state in
-(cmds)
+(*cmds)
 	local cmds
 	cmds=(
 	'help:print a brief help'
 	'man:show extended help as a manpage'
+	)
+	[[ $service == *server ]] || cmds+=(
 	'stop-server:stop schedule-server'
 	'queue:queue job for later execution'
 	'start:queue and run job'

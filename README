@@ -1,5 +1,5 @@
 (C) Martin Väth <martin@mvath.de>
-This project is under the BSD license.
+This project is under a BSD type license.
 
 schedule - script to schedule jobs in a multiuser multitasking environment
 
@@ -34,12 +34,19 @@ where you could just write e.g. "starter emerge -NDu @world",
 "starter shutdown -h now" in different shells, and the later commands would
 not restart until the former ones have finished (or are stopped with Ctrl-C).
 However, this approach was limited to removing "scheduled" jobs (with Ctrl-C)
-or adding new jobs at the end,
-The current project is an improvement which is much more flexible.
-With this project, you can instead of running the above command line
-do the following.
+or adding new jobs at the end.
 
-0. unless you started schedule-server in an init file, you run
+The current project is an improvement which is much more flexible:
+You can add jobs anywhere, sort jobs differently, start jobs in parallel,
+schedule based on the exit status of other jobs, schedule jobs of
+different chroots without any problems.
+Actually, you can even schedule jobs of different machines!
+
+Instead of running the above command line you would do the following when
+you use this project.
+
+0. unless you started schedule-server in an init file or use a
+   schedule-server of a different machine, you run
 	schedule-server &
 
 1. You run
@@ -75,14 +82,14 @@ This will run all jobs sequentially, even if they return a nonzero exit status;
 The exit status of "schedule run" will be the maximum of the all others,
 that is the command "succeeds" if all jobs succeeded.)
 
-Now if we suddenly decide that something else must be done, e.g.
+Now if we suddenly decide that something else must be done, e.g.,
 the same jobs should be queued in a chroot, we just press Ctrl-C in the
 shell of 5, queue further commands and run "schedule exec" again.
 Alternatively, we could have used
 
 	schedule --job -1 q something
 
-to insert our new job "something" one step before the end of the queue.
+to insert our new job "something" one entry before the end of the queue.
 If we have inserted a job at the wrong place, we can sort the queue
 differently. For instance,
 
@@ -97,7 +104,7 @@ If you lost an overview of the queued jobs,
 
 will show you the jobs with their numbers.
 
-Instead of sequential executing, one can also start or more jobs in
+Instead of sequential executing, one can also start more jobs in
 parallel, wait for other jobs, build dependencies on the success of
 certain jobs etc. To stay with the above example, suppose that you have
 scheduled the jobs
@@ -123,7 +130,7 @@ or, equivalently,
 Note that jobs are never executed twice. For instance, the above
 "schedule exec 1:3" will not start the first job again (which in the
 above example is already running and maybe possibly finished meanwhile);
-more drastically the last "schedule exec" will not restart any job again
+more drastically, the last "schedule exec" will not restart any job again
 which has already been run, but only start the remaining job 4 if the
 former ones succeeded.
 
@@ -154,8 +161,8 @@ Security considerations: Global vs. Local Servers, SCHEDULE_{,SERVER}_OPTS
 In the above example, we assumed that you are root and that you are the
 only user on the machine: In this case you can just run schedule-server
 in an init-file. The server will use a TCP socket for communicating.
-(Normally on a local socket, but you can even list worldwide you use
-that -h 0.0.0.0).
+(Normally on a local socket, but you can even list worldwide by
+using -h 0.0.0.0).
 
 However, you should be aware that everybody who can access the TCP socket
 can start/see/cancel/re-order all of your tasks!
@@ -163,6 +170,12 @@ can start/see/cancel/re-order all of your tasks!
 This is intentional so that you can also queue tasks as different users.
 It is not really a security risk, since users can only start e.g. a
 task of root if root has queued this task before.
+(This is not a built-in "feature" of schedule but due to the nature of the
+unix permission system. In fact, schedule-server needs no permissions at all
+to do its job [except for accessing the TCP socket], and therefore it is
+highly recommended to start it with an unprivileged user like "nobodoy";
+if started as root, schedule-server will by default change to that user.)
+
 However, you should always be aware that a possible attacker might
 change the order of you tasks.  For instance, in the above example,
 the attacker might be able to shutdown the machine whenever he wants.
@@ -173,14 +186,16 @@ every schedule command must use the option -l.
 In this case, only users who can access this file are able to modify the tasks.
 
 The disadvantage of this is that you are now longer able to schedule tasks
-of all users, and also in a chroot you have to make sure that you can
-access the socket file (for instance by using mount --bind into the chroot).
+of all users or of different machines (unless you use other tools like
+a network filesystem which supports file sockets), and also in a chroot
+you have to make sure that you can access the socket file (for instance
+by using mount --bind into the chroot).
 
-As usual, you decide between security and convenience,
-that is starting schedule-server -l (secure) against schedule-server.
+As usual, you decide between security and convenience, that is,
+starting schedule-server -l (secure) against schedule-server.
 
 To simplify setting an option like "-l" globally for every call to schedule
-and schedule-server, schdule supports the variable SCHEDULE_OPTS: Just
+and schedule-server, schedule supports the variable SCHEDULE_OPTS: Just
 	export SCHEDULE_OPTS=-l
 and all of your future calls of schedule and schedule-server will use the
 local file. (You can manually override this predefined option by specifying
@@ -188,13 +203,16 @@ the opposite option -t explicitly.)
 Note that the above specified option takes effect in all schedule commands
 as well as in schedule-server. If you want to specify additional options,
 you must correspondingly export SCHEDULE_SERVER_OPTS. (The latter
-overrides SCHEDULE_OPTS, that is, if you set it you probably want to include
-the value of SCHEDULE_OPTS, too.)
+overrides SCHEDULE_OPTS; to avoid this "override" you can use things like:
+	export SCHEDULE_SERVER_OPTS='$SCHEDULE_SERVER -f "/foo/socket name"'
+Note that the interpretation of $SCHEDULE_SERVER and the quotes " " will
+be done by schedule-server.)
 
 Of course, nothing prevents you from starting a global server and a local
 server simultaneously and to mix "global" commands with local (and possibly
 security critical) tasks: You only have to be aware to use always the
-correct options (-l or -t) for the corresponding schedule commands.
+correct options (e.g. -l, -t, or specify the correct hosts/ports/filenames)
+for the corresponding schedule commands.
 
 Actually you can even have several TCP servers running (using different ports)
 and several "local" servers (using different socket files): Ports, hosts,
@@ -205,9 +223,10 @@ Requirements
 ============
 
 You need a multitasking system with TCP Sockets and/or Unix Domain sockets
-(for usage with -t or -l, respectively). Any Linux flavour will do -
-and a not too ancient version of perl. (Practically any full
-Perl 5 installation contains the required libraries in its core.)
+(for usage with -t or -l, respectively). Any Linux flavour will do
+(as will many other operating systems) and any not too ancient version of perl:
+Any full installation of perl (>=5.6) contains the required libraries in
+its core.
 
 
 Installation
@@ -215,8 +234,17 @@ Installation
 
 If you are a gentoo user, you can just emerge schedule from the mv overlay.
 
-Otherwise you just have to copy bin/* into /usr/bin/
+Otherwise you have to copy bin/* into /usr/bin/
 or any other directory of your $PATH.
+
+Moreover, you have to copy lib/ (or its content) into the same directory
+as the binaries or into the parent directory or into a directory shown by
+	perl -e 'print join("\n", @INC, "")'
+Alternatively, copy lib/* into /usr/share/schedule (or into a different
+directory by modifying that path in the sourcecode; for a proper installation
+it is recommended in this case to remove/comment out the lines between
+"use FindBin;" and "}" in the sourcecode).
+
 For zsh completion support also copy zsh/_schedule into a directory of
 your zsh's $fpath.
 
