@@ -16,7 +16,7 @@ use Schedule::Helpers qw(is_nonnegative);
 
 use Exporter qw(import);
 
-our $VERSION = '0.8';
+our $VERSION = '0.9';
 
 sub new {
 	my ($class, $name, $ver) = @_;

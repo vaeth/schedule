@@ -1,5 +1,10 @@
 # ChangeLog for schedule
 
+*schedule-0.9:
+	Martin Väth <martin at mvath.de>:
+	- Introduce start-or-queue and even recommend its usage by mentioning
+	  it in the main examples
+
 *schedule-0.8:
 	Martin Väth <martin at mvath.de>:
 	- Allow unquoted environment variables inside environment variables

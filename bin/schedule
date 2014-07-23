@@ -16,7 +16,7 @@ if(defined($FindBin::Bin) && ($FindBin::Bin ne '')) {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule', '0.8');
+my $s = Schedule::Connect->new('schedule', '0.9');
 
 =head1 NAME
 
@@ -26,7 +26,7 @@ schedule - queue jobs for later execution and schedule them
 
 =over 8
 
-=item B<schedule> [options] B<queue>|B<start> I<cmd> [I<args> ...]
+=item B<schedule> [options] B<queue>|B<start>|B<start-or-queue> I<cmd> [I<args> ...]
 
 =item B<schedule> [options] I<command> [I<jobs> ...]
 
@@ -42,6 +42,8 @@ B<cancel>, B<remove>, B<insert>
 commands can be shortcut by the shortest sequence which makes them unique.
 For instance, B<q> can be used instead of B<queue>, B<r> instead of B<run>.
 B<s> (despite being non-unique) can be used instead of B<start>.
+Moreover, B<start-or-queue> can be abbreviated as anything containing B<s>
+and B<q>.
 
 I<jobs> is either a job numbers or a string of the form I<from>B<:>I<to>
 where I<from> and B<to> may be omitted (and then mean 1 or infinity,
@@ -81,11 +83,11 @@ Then run in three different shells the three commands
 
 =over 8
 
-=item B<schedule start emerge -NDu @world>
+=item B<schedule start-or-queue emerge -NDu @world>
 
-=item B<schedule queue revdep-rebuild>
+=item B<schedule start-or-queue revdep-rebuild>
 
-=item B<schedule queue shutdown -h now>
+=item B<schedule start-or-queue shutdown -h now>
 
 =back
 
@@ -120,7 +122,7 @@ and then in a further shell
 
 =back
 
-The runs first B<calculate 1> and upon a succesfull finishing
+This runs first B<calculate 1> and upon a succesfull finishing
 B<calculate 2> and B<calculate 3> in parallel.
 When both are succesfully finished, B<shutdown -h now> is executed.
 
@@ -171,14 +173,15 @@ Bind/connect to I<addr>. The default is 127.0.0.1 (localhost only).
 
 =item B<--job=>I<jobnr> or B<-j> I<jobnr>
 
-If used with B<schedule queue>, it describes where the job should be inserted
-into the queue. The special number B<0> means the end of the list
+Thus describes where the job(s) should be inserted into the queue.
+The special number B<0> means the end of the queue
 (which may be the number of the last running job or one later, depending
 on the selected action); negative number count from the end of the list.
 The default is B<0>.
 
-If used with B<schedule insert>, it describes the first position where
-the listed jobs are to be moved to.
+This means e.g. that B<schedule queue> will by default queue new jobs after
+the end of the queue while e.g. B<schedule insert> will shift the selected
+jobs (in their order of selection) to the end of the queue.
 
 =item B<--exit=>I<exitstatus> or B<-e> I<exitstatus>
 
@@ -206,6 +209,16 @@ Display extended help as a manpage.
 
 Queue I<cmd> I<args> ... I<args> for execution.
 The command will be exuted using the shell.
+
+=item B<start> I<cmd> [I<args> ... I<args>]
+
+As B<queue>, but start the command immediately without waiting for a
+further signal through B<schedule>.
+
+=item B<start-or-queue> I<cmd> [I<args> ... I<args>]
+
+As B<start> if all previously queued jobs have been finished already.
+Otherwise act as B<queue>.
 
 =item B<run> I<jobs>
 
@@ -318,6 +331,11 @@ sub cmd_queue {
 	my $cmd = &join_quoted(@ARGV);
 	my $success = &client_send("$runmode\n$destjob\n" . length($cmd));
 	$success = '' unless(&client_recv($unique));
+	if($runmode eq 'start-or-queue') {
+		$unique =~ m{^([^\n]*)\n(.*)};
+		$runmode = $1;
+		$unique = $2
+	}
 	&signals(\&cancel_job);
 	$success = '' unless(&client_send($cmd));
 	return '' unless($success);
@@ -655,6 +673,9 @@ if($action =~ m{^sto}i) {
 } elsif($action =~ m{^stat}i) {
 	++$quiet;
 	$action = \&cmd_list
+} elsif($action =~ m{q.*s|s.*q}i) {
+	$runmode = 'start-or-queue';
+	$action = \&cmd_queue
 } elsif($action =~ m{^q}i) {
 	$runmode = 'queue';
 	$action = \&cmd_queue

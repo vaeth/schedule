@@ -17,7 +17,7 @@ if(defined($FindBin::Bin) && ($FindBin::Bin ne '')) {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule-server', '0.8');
+my $s = Schedule::Connect->new('schedule-server', '0.9');
 
 =head1 NAME
 
@@ -248,12 +248,19 @@ sub serverloop {
 		$data = '' unless($s->conn_recv($conn, $data));
 		$data =~ s{^([^\n]*)\n?}{};
 		my $cmd = (defined($1) ? $1 : '');
-		if(($cmd eq 'queue') || ($cmd eq 'start')) {
+		if(($cmd eq 'queue') || ($cmd eq 'start') || ($cmd eq 'start-or-queue')) {
+			my $send;
+			if($cmd eq 'start-or-queue') {
+				$cmd = (&all_finished() ? 'start' : 'queue');
+				$send = $cmd . "\n"
+			} else {
+				$send = ''
+			}
 			$data =~ s{^([+-]?\d*)\n}{};
 			my $index = &my_index($2, 1);
 			my $stat = (($cmd eq 'start') ? '' : undef);
 			++$unique;
-			$s->conn_send($conn, $unique);
+			$s->conn_send($conn, $send . $unique);
 			$s->conn_recv($conn, $data, undef, $data);
 			splice(@$joblist, $index, 0, [$conn, $data, $stat, $unique, []]);
 			$will_close = '' unless(defined($stat))
@@ -442,6 +449,16 @@ sub push_wait {
 	my ($j, $p) = @_;
 	my $wait = $j->[4];
 	push(@$wait, $p)
+}
+
+# return whether all jobs are finished
+
+sub all_finished {
+	for my $j (@$joblist) {
+		my $s = &get_status($j);
+		return '' unless(defined($s) && ($s ne ''))
+	}
+	1
 }
 
 # return unique list of internal indices corresponding to index names

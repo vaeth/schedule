@@ -50,26 +50,25 @@ you use this project.
 	schedule-server &
 
 1. You run
-	schedule s emerge -NDu @world
+	schedule sq emerge -NDu @world
    This is a shortcut for
-	schedule start emerge -NDu @world
+	schedule start-or-queue emerge -NDu @world
    It immediately starts the "emerge -NDu @world" so that you will not
    loose time when doing the next steps.
    Simultaneously, it will "queue" the job "emerge -NDu @world".
    What this means will become clear in step 5.
 
 2. In a different shell you run
-	schedule q kernel -f
-   This is a shortcut for
-	schedule queue kernel -f
-   It means that "kernel -f" is not started immediately,
-   but it will be "queued" for scheduling in step 5.
+	schedule sq kernel -f
+   If you enter it while the above command is still running,
+   "kernel -f" is not started immediately, but it will be "queued"
+   for scheduling in step 5.
 
 3. In another shell run
-	schedule q emerge -1O @module-rebuild
+	schedule sq emerge -1O @module-rebuild
 
 4. In yet another shell run
-	schedule q shutdown -h now
+	schedule sq shutdown -h now
 
 5. Finally, we run in yet another shell:
 	schedule exec
@@ -87,7 +86,7 @@ the same jobs should be queued in a chroot, we just press Ctrl-C in the
 shell of 5, queue further commands and run "schedule exec" again.
 Alternatively, we could have used
 
-	schedule --job -1 q something
+	schedule --job -1 sq something
 
 to insert our new job "something" one entry before the end of the queue.
 If we have inserted a job at the wrong place, we can sort the queue
