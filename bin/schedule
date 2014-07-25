@@ -6,6 +6,7 @@ use Pod::Usage;
 use File::Spec;
 use IO::Select;
 use IO::Socket; # INET or UNIX, depending on user's choice
+#use Sys::Hostname;
 
 use lib '/usr/share/schedule';
 use FindBin;
@@ -16,7 +17,7 @@ if(defined($FindBin::Bin) && ($FindBin::Bin ne '')) {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule', '0.9');
+my $s = Schedule::Connect->new('schedule', '0.10');
 
 =head1 NAME
 
@@ -37,7 +38,7 @@ schedule - queue jobs for later execution and schedule them
 I<command> is one of:
 
 B<run>, B<exec>, B<bg>, B<parallel>, B<wait>, B<list>, B<status>,
-B<cancel>, B<remove>, B<insert>
+B<ok>, B<finished>, B<started>, B<cancel>, B<remove>, B<insert>
 
 commands can be shortcut by the shortest sequence which makes them unique.
 For instance, B<q> can be used instead of B<queue>, B<r> instead of B<run>.
@@ -161,7 +162,6 @@ This option implies B<--tcp> (unless overridden later on).
 Bind to I<addr>. The default is 127.0.0.1 (localhost only).
 This option implies B<--tcp> (unless overridden later on).
 
-
 =item B<--port=>I<port> or B<-P> I<port>
 
 Use port number I<port> for interprocess communication-
@@ -173,15 +173,38 @@ Bind/connect to I<addr>. The default is 127.0.0.1 (localhost only).
 
 =item B<--job=>I<jobnr> or B<-j> I<jobnr>
 
-Thus describes where the job(s) should be inserted into the queue.
+This describes where the job(s) should be inserted into the queue.
 The special number B<0> means the end of the queue
-(which may be the number of the last running job or one later, depending
-on the selected action); negative number count from the end of the list.
+(which may be the number of the last queued job or one later, depending
+on the selected action); negative numbers count from the end of the list.
 The default is B<0>.
 
 This means e.g. that B<schedule queue> will by default queue new jobs after
 the end of the queue while e.g. B<schedule insert> will shift the selected
 jobs (in their order of selection) to the end of the queue.
+
+=item B<--ok=>I<jobs> or B<-o> I<jobs>
+
+This option can be used repeatedly; all arguments are collected.
+I<jobs> can be as in the normal argument list (space-separated).
+If used with B<start-or-queue>, B<ok>, B<finished>, B<started>,
+check whether the listed jobs have been finished with zero exit status.
+
+=item B<--finished=>I<jobs> or B<-x> I<jobs>
+
+This option can be used repeatedly; all arguments are collected.
+I<jobs> can be as in the normal argument list (space-separated).
+If used with B<start-or-queue>, B<ok>, B<finished>, B<started>,
+check whether the listed jobs have been finished, independent of their
+exit status.
+
+=item B<--started=>I<jobs> or B<-s> I<jobs>
+
+This option can be used repeatedly; all arguments are collected.
+I<jobs> can be as in the normal argument list (space-separated).
+If used with B<start-or-queue>, B<ok>, B<finished>, B<started>,
+check whether the listed jobs have been started (finished jobs
+are considered as started).
 
 =item B<--exit=>I<exitstatus> or B<-e> I<exitstatus>
 
@@ -217,8 +240,12 @@ further signal through B<schedule>.
 
 =item B<start-or-queue> I<cmd> [I<args> ... I<args>]
 
-As B<start> if all previously queued jobs have been finished already.
-Otherwise act as B<queue>.
+Act as B<start> if all jobs specified through the options
+B<--ok>, B<--finished>, B<--started> meet the corresponding requirements;
+otherwise act as B<queue>.
+If none of the options B<--ok>, B<--finished>, or B<--started> is specified,
+act as if B<--finished :> would have been specified, that is, B<start> is
+executed only if there is not any unfinished job in the queue.
 
 =item B<run> I<jobs>
 
@@ -236,7 +263,7 @@ exit status.
 
 =item B<bg> I<jobs>
 
-This is like B<schedule run> but starts all non-running jobs in parallel
+This is like B<schedule run> but starts all non-started jobs in parallel
 and then returns.
 
 =item B<wait> I<jobs>
@@ -259,7 +286,20 @@ commands.
 
 =item B<status> I<jobs>
 
-This is like B<--quiet> B<list>
+This is like B<--quiet> B<list>.
+
+=item B<ok>|B<finished>|B<started>
+
+This is a more script-friendly form of B<status>, usually without any output:
+Returns with exit status 0 if all jobs specified through the options
+B<--ok>, B<--finished>, B<--started> meet the corresponding requirements.
+(The I<jobs> arguments arequivalent to using the corresponding
+B<--ok>, B<--finished>, or B<--started> options with these arguments,
+respectively.)
+If none of these options is specified and no I<jobs> argument is given,
+acts as if the argument B<:> is given for I<jobs>.
+If the exit status is nonzero, it is the maximum of B<1> and of all exit values
+of jobs specified through B<--ok>.
 
 =item B<remove> I<jobs>
 
@@ -279,7 +319,7 @@ first two jobs one command before the end of the list.
 
 =item B<cancel> I<jobs>
 
-If I<jobs> are not yet running they will never be started.
+If I<jobs> are not yet started they will never be started.
 If they are running, their exit status will be ignored.
 The scheduler is forced to assume that the jobs finished with the
 exitstatus specified by B<--cancel> (default is B<0>).
@@ -302,11 +342,13 @@ Martin VE<auml>th E<lt>martin@mvath.deE<gt>
 my $quiet = 0;
 my $cancel = 0;
 my $destjob = 0;
+my @ok = ();
+my @finished = ();
+my @started = ();
 
 # Global/State variables:
 
 my $unique = undef;
-my $runmode = undef;
 my $socket = undef;
 my $exitstatus = 0;
 
@@ -325,13 +367,38 @@ sub cmd_stop_server {
 	1
 }
 
+sub cmd_have {
+	my ($type) = @_;
+	&valid_jobs(@ARGV);
+	if(@ARGV) {
+		push(@$type, @ARGV);
+		&nonempty_have()
+	} elsif(!&nonempty_have()) {
+		push(@$type, ':')
+	}
+	return '' unless(&openclient() &&
+		&client_send('have' . &have_args()) &&
+		&client_recv(my $reply));
+	return '' unless(&is_nonnegative($reply));
+	&set_exitstatus($reply);
+	1
+}
+
+
 sub cmd_queue {
+	my ($runmode) = @_;
+	my $have = ($runmode eq 'start-or-queue');
+	if($have) {
+		push(@finished, ':') if(&nonempty_have());
+		$runmode .= &have_args();
+	}
 	return '' unless(&openclient());
 	&signals();
-	my $cmd = &join_quoted(@ARGV);
+	my $cmd = '[' . &my_user() . '@' . &my_hostname() . '] ' .
+		&join_quoted(@ARGV);
 	my $success = &client_send("$runmode\n$destjob\n" . length($cmd));
 	$success = '' unless(&client_recv($unique));
-	if($runmode eq 'start-or-queue') {
+	if($have) {
 		$unique =~ m{^([^\n]*)\n(.*)};
 		$runmode = $1;
 		$unique = $2
@@ -365,15 +432,13 @@ sub cmd_queue {
 
 sub cmd_run {
 	&validate_jobs();
-	&runner()
+	&runner(@_)
 }
 
 sub cmd_parallel {
 	&validate_jobs();
-	$runmode = 'bg';
-	return unless(&runner());
-	$runmode = 'wait';
-	&runner()
+	return unless(&runner('bg'));
+	&runner('wait')
 }
 
 sub cmd_list {
@@ -407,8 +472,10 @@ sub cmd_list {
 				$stat = 'waiting'
 			} elsif($stat eq '') {
 				$stat = 'running'
-			} else {
+			} elsif(&is_nonnegative($stat)) {
 				&set_exitstatus($stat)
+			} else {
+				return ''
 			}
 			unless($quiet) {
 				return '' unless(&client_send("\n") &&
@@ -418,18 +485,13 @@ sub cmd_list {
 				if($quiet) {
 					print($stat . "\n")
 				} else {
-					print("$job ($stat): $reply\n")
+					print("$job ($stat) $reply\n")
 				}
 			}
 		}
 	}
 	return 1 unless($sent);
 	&client_send("\n")
-}
-
-sub cmd_status {
-	++$quiet;
-	&cmd_list()
 }
 
 sub cmd_cancel {
@@ -520,6 +582,7 @@ sub closeclient {
 }
 
 sub runner {
+	my ($runmode) = @_;
 	my $send = (($runmode eq 'exec') ? 'run' : $runmode) . "\n";
 	for my $a (@ARGV) {
 		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
@@ -550,7 +613,6 @@ sub runner {
 	1
 }
 
-
 sub send_status {
 	# Sending exitstatus must cause no errors/warnings:
 	&client_send("end\n" . "$unique\n" . "$exitstatus")
@@ -562,7 +624,7 @@ sub send_status {
 # Cancel a job (if "schedule queue" is interrupted by a signal):
 
 sub cancel_job {
-	&no_signals();
+	&signals();
 	&closeclient(1);
 	#&send_status($cancel);
 	&openclient(1) && &client_send("cancel\n$cancel\n" .
@@ -573,18 +635,47 @@ sub cancel_job {
 }
 
 # Check whether @ARGV are valid job specifications.
-# Let @ARGV = (':') if there are none.
+# Let @ARGV = (':') if there are none and no argument is passed.
 
 sub validate_jobs {
 	unless(@ARGV) {
-		@ARGV = (':');
+		@ARGV = (':') unless(@_);
 		return
 	}
-	for my $i (@ARGV) {
-		$s->fatal("invalid argument: '$i'")
-			unless($i =~ m{^(?:\d+|(?:\d*\:\d*))$})
+	&valid_jobs(@ARGV)
+}
+
+sub valid_jobs {
+	for my $i (@_) {
+		$s->fatal('invalid job specification: ' . &join_quoted($i))
+			unless($i =~ m{^(?:[+-]?\d+|(?:[+-]?\d*\:[+-]?\d*))$})
 	}
 }
+
+# Normalize and validate the value of @ok, @finished, @started.
+# Return true if at least one is nonempty.
+
+sub nonempty_have {
+	my $ret = '';
+	for my $a (\@ok, \@finished, \@started) {
+		$ret = 1 if(@$a);
+		@$a = split(' ', join(' ', @$a));
+		&valid_jobs(@$a);
+	}
+	$ret
+}
+
+# Return passed string for the value of @ok, @finished, @started
+
+sub have_args {
+	my $ret = '';
+	for my $a (\@ok, \@finished, \@started) {
+		$ret .= "\n" . join(' ', @$a)
+	}
+	$ret
+}
+
+# Check whether args are valid job specifications
 
 sub start_end {
 	my ($a) = @_;
@@ -615,13 +706,30 @@ sub join_quoted {
 }
 
 sub check_file {
-	$s->default_filename();
+	my $default = $s->default_filename();
 	my $file = $s->file();
 	return 1 if(-S $file);
 	$s->error("no socket $file exists", 'maybe you should run first: ' .
-		&join_quoted('schedule-server', '-f', $file) . ' &');
+		&join_quoted('schedule-server',
+			($default ? '-l' : ('-f', $file))) . ' &');
 	exit(7)
 }
+
+{ my $hostname = undef; # a static closure
+sub my_hostname {
+	return $hostname if(defined($hostname));
+	$hostname = $ENV{'HOSTNAME'};
+	unless(&is_nonempty($hostname)) {
+		eval {
+			require File::Which;
+			File::Which->import();
+			$hostname = hostname()
+		};
+		$hostname = '' unless($@ && defined($hostname))
+	}
+	$hostname =~ s{\s}{ }g;
+	$hostname
+}}
 
 #
 # Now the main program:
@@ -636,6 +744,9 @@ if(exists($ENV{'SCHEDULE_OPTS'})) {
 $s->get_options(
 	'exit|e=i', \$cancel,
 	'job|j=i', \$destjob,
+	'ok|o=s', \@ok,
+	'finished|x=s', \@finished,
+	'started|s=s', \@started,
 	'quiet|q+', \$quiet
 );
 
@@ -650,44 +761,44 @@ $s->fatal("illegal --exit $cancel")
 
 my $action = shift(@ARGV);
 $action = '' unless(defined($action));
+my $ret;
 if($action =~ m{^sto}i) {
-	$action = \&cmd_stop_server
+	$ret = &cmd_stop_server()
 } elsif($action =~ m{^(?:re|d)}i) {
-	$action = \&cmd_remove
+	$ret = &cmd_remove()
 } elsif($action =~ m{^r}i) {
-	$runmode = 'run';
-	$action = \&cmd_run
+	$ret = &cmd_run('run')
 } elsif($action =~ m{^(?:e|x)}i) {
-	$runmode = 'exec';
-	$action = \&cmd_run
+	$ret = &cmd_run('exec')
 } elsif($action =~ m{^b}i) {
-	$runmode = 'bg';
-	$action = \&cmd_run
+	$ret = &cmd_run('bg')
 } elsif($action =~ m{^p}i) {
-	$action = \&cmd_parallel
+	$ret = &cmd_parallel()
 } elsif($action =~ m{^w}i) {
-	$runmode = 'wait';
-	$action = \&cmd_run
+	$ret = &cmd_run('wait')
 } elsif($action =~ m{^l}i) {
-	$action = \&cmd_list
+	$ret = &cmd_list()
 } elsif($action =~ m{^stat}i) {
 	++$quiet;
-	$action = \&cmd_list
+	$ret = &cmd_list()
+} elsif($action =~ m{^o}i) {
+	$ret = &cmd_have(\@ok)
+} elsif($action =~ m{^f}i) {
+	$ret = &cmd_have(\@finished)
+} elsif($action =~ m{^starte}i) {
+	$ret = &cmd_have(\@started)
+} elsif($action =~ m{^(i|m|sh)}i) {
+	$ret = &cmd_insert()
 } elsif($action =~ m{q.*s|s.*q}i) {
-	$runmode = 'start-or-queue';
-	$action = \&cmd_queue
+	$ret = &cmd_queue('start-or-queue')
 } elsif($action =~ m{^q}i) {
-	$runmode = 'queue';
-	$action = \&cmd_queue
+	$ret = &cmd_queue('queue')
 } elsif($action =~ m{^s}i) {
-	$runmode = 'start';
-	$action = \&cmd_queue
-} elsif($action =~ m{^i}i) {
-	$action = \&cmd_insert
+	$ret = &cmd_queue('start')
 } elsif($action =~ m{^c}i) {
-	$action = \&cmd_cancel
+	$ret = &cmd_cancel()
+} else {
+	pod2usage(2)
 }
-pod2usage(2) unless(ref($action) eq 'CODE');
-$exitstatus = 7 unless(&{$action}());
-$exitstatus = 7 unless(&closeclient());
+$exitstatus = 7 unless(&closeclient() && $ret);
 exit($exitstatus);

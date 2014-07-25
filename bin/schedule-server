@@ -17,7 +17,7 @@ if(defined($FindBin::Bin) && ($FindBin::Bin ne '')) {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule-server', '0.9');
+my $s = Schedule::Connect->new('schedule-server', '0.10');
 
 =head1 NAME
 
@@ -198,8 +198,14 @@ my $keepgroup = $keepuser;
 # Global/State variables:
 
 my $joblist = [];
+my $serverid = rand() . ":$$:";
+$serverid =~ s{^\s*\d*[.,]}{};
 my $unique = 0;
 my $socket = undef;
+
+# Constant variables:
+
+my $have_re = qr{([^\n]*)\n([^\n]*)\n([^\n]*)\n?};
 
 #
 # Functions
@@ -227,7 +233,9 @@ sub openserver {
 		Reuse => 1
 	));
 	unless(defined($socket)) {
-		$s->fatal('unable to setup socket: ' . $!);
+		$s->fatal('unable to setup socket: ' . $!,
+			($s->tcp() ? () : 'maybe you should remove ' .
+				$s->file()));
 		return ''
 	}
 	&signals(\&signal_handler);
@@ -251,7 +259,8 @@ sub serverloop {
 		if(($cmd eq 'queue') || ($cmd eq 'start') || ($cmd eq 'start-or-queue')) {
 			my $send;
 			if($cmd eq 'start-or-queue') {
-				$cmd = (&all_finished() ? 'start' : 'queue');
+				$data =~ s{$have_re}{};
+				$cmd = (&have_jobs($1, $2, $3) ? 'queue' : 'start');
 				$send = $cmd . "\n"
 			} else {
 				$send = ''
@@ -260,7 +269,7 @@ sub serverloop {
 			my $index = &my_index($2, 1);
 			my $stat = (($cmd eq 'start') ? '' : undef);
 			++$unique;
-			$s->conn_send($conn, $send . $unique);
+			$s->conn_send($conn, $send . $serverid . $unique);
 			$s->conn_recv($conn, $data, undef, $data);
 			splice(@$joblist, $index, 0, [$conn, $data, $stat, $unique, []]);
 			$will_close = '' unless(defined($stat))
@@ -281,7 +290,7 @@ sub serverloop {
 				}
 				$s->conn_send($conn, $reply);
 				if($cmd ne 'bg') {
-					if(defined($stat) && ($stat ne '')) {
+					if(&is_nonempty($stat)) {
 						$s->conn_send($conn, $stat)
 					} else {
 						&push_wait($job, $conn);
@@ -291,16 +300,12 @@ sub serverloop {
 			}
 		} elsif($cmd eq 'end') {
 			$data =~ s{^([^\n]*)\n}{};
-			my $u = (defined($1) ? $1 : '');
-			for my $j (@$joblist) {
-				if(&get_unique($j) eq $u) {
-					my $stat = &get_status($j);
-					&send_finish($j, $data);
-					&set_status($j, $data)
-						if(defined($stat) &&
-							($stat eq ''));
-					last
-				}
+			my $j = &job_from_unique($1);
+			if(defined($j)) {
+				&send_finish($j, $data);
+				my $stat = &get_status($j);
+				&set_status($j, $data)
+					if(defined($stat) && ($stat eq ''))
 			}
 		} elsif($cmd eq 'cancel') {
 			while() {
@@ -342,6 +347,9 @@ sub serverloop {
 				last unless($data =~ s{^(list|status)\n?}{});
 				$cmd = $1
 			}
+		} elsif($cmd eq 'have') {
+			$data =~ m{$have_re};
+			$s->conn_send($conn, &have_jobs($1, $2, $3))
 		} elsif($cmd eq 'insert') {
 			$data =~ s{([^\n]*\n)}{};
 			my $index = &my_index($1, 1);
@@ -451,14 +459,45 @@ sub push_wait {
 	push(@$wait, $p)
 }
 
-# return whether all jobs are finished
+# return whether all jobs are ok, finished, started
 
-sub all_finished {
-	for my $j (@$joblist) {
-		my $s = &get_status($j);
-		return '' unless(defined($s) && ($s ne ''))
+sub have_jobs {
+	my ($ok, $finished, $started) = @_;
+	my $ret = 0;
+	for my $i (&unique_indices($ok)) {
+		my $s = &get_status($joblist->[$i]);
+		$s = 1 unless(&is_nonempty($s));
+		$ret = $s if($s > $ret);
 	}
-	1
+	return $ret if($ret);
+	for my $i (&unique_indices($finished)) {
+		my $s = &get_status($joblist->[$i]);
+		return 1 unless(&is_nonempty($s))
+	}
+	for my $i (&unique_indices($started)) {
+		my $s = &get_status($joblist->[$i]);
+		return 1 unless(defined($s))
+	}
+	0
+}
+
+# return job corresponding to unique identifier
+
+sub job_from_unique {
+	my $i = &index_from_unique(@_);
+	defined($i) ? $joblist->[$i] : undef
+}
+
+# return index in $joblist corresponding to unique identifier
+
+sub index_from_unique {
+	my ($u) = @_;
+	return undef unless(substr($u, $[, length($serverid)) eq $serverid);
+	$u = substr($u, length($serverid) + $[);
+	for(my $i = 0; $i < @$joblist; ++$i) {
+		return $i if(&get_unique($joblist->[$i]) eq $u)
+	}
+	undef
 }
 
 # return unique list of internal indices corresponding to index names
@@ -468,21 +507,22 @@ sub unique_indices {
 	my @ret = ();
 	my ($ind) = @_;
 	$ind = '' unless(defined($ind));
-	for my $name (split(qr{\s+}, $_[0])) {
+	for my $name (split(' ', $_[0])) {
 		if($name =~ m{^(\d*)\:(\d*)$}) {
 			my $i = (($1 eq '') ? 1 : $1);
-			my $end = &my_index($2);
-			for($i = &my_index($i); $i <= $end; ++$i) {
+			my $end = &my_index($2, 0);
+			for($i = &my_index($i, 0); $i <= $end; ++$i) {
 				next if(exists($have{$i}));
 				$have{$i} = 1;
 				push(@ret, $i)
 			}
 			next
+		} elsif($name =~ m{^\d+$}) {
+			my $i = &my_index($name);
+			next if(exists($have{$i}));
+			$have{$i} = 1;
+			push(@ret, $i)
 		}
-		my $i = &my_index($1);
-		next if(exists($have{$i}));
-		$have{$i} = 1;
-		push(@ret, $i)
 	}
 	@ret
 }
@@ -491,35 +531,34 @@ sub unique_indices {
 
 sub indexname {
 	my ($i) = @_;
-	return '0' if($i == @$joblist);
+	return '0' if($i >= @$joblist);
 	++$i;
 	"$i"
 }
 
 # return internal index of array corresponding to $1
-# If second arg is non-null, let 0 count from end of list + 1
+# If second arg is 0, return only within valid range.
+# If second arg is 1, let 0 count from end of list + 1.
 
 sub my_index {
 	my ($arg, $end) = @_;
 	my $max = scalar(@$joblist);
 	$arg = 0 unless(defined($arg));
 	if($arg =~ m{^u(.*)$}) {
-		my $u = $1;
-		for(my $i = 0; $i < @$joblist; ++$i) {
-			return $i if(&get_unique($joblist->[$i]) eq $u)
-		}
-		return 0
+		my $i = &index_from_unique($1);
+		return (defined($i) ? $i : 0)
 	}
 	$arg = 0 unless($arg =~ m{^[+-]?\d+$});
+	--$max if(&is_nonempty($end) && ($end == 0));
 	return $max if($arg > $max);
 	return ($arg - 1) if($arg > 0);
 	$arg += $max;
-	--$arg unless($end);
+	--$arg unless(&is_nonempty($end));
 	($arg < 0) ? 0 : $arg
 }
 
 sub prepare_file {
-	&set_filename();
+	$s->default_filename();
 	umask($umask);
 	my ($vol, $dir) = File::Spec->splitpath($s->file());
 	$dir = File::Spec->catpath($vol, $dir);

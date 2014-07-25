@@ -1,5 +1,17 @@
 # ChangeLog for schedule
 
+*schedule-0.10:
+	Martin Väth <martin at mvath.de>:
+	- Add --ok, --finished, --started to start-or-queue
+	- Add query commands: ok, finished, started
+	- Add [user@host] to job listing
+	- Fix crash in signal handling (regression from 0.8)
+	- Fix crash with -l (regression from 0.8)
+	- Fix interpretation/checking of job numbers/ranges in some cases
+	- Use serverid so that orphant jobs cannot confuse a restarted server
+	- Improve message of schedule -l if server cannot be found
+	- README: First example with unqueued shutdown command
+
 *schedule-0.9:
 	Martin Väth <martin at mvath.de>:
 	- Introduce start-or-queue and even recommend its usage by mentioning

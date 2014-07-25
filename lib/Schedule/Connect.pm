@@ -12,11 +12,11 @@ use integer;
 use Getopt::Long;
 use Pod::Usage;
 
-use Schedule::Helpers qw(is_nonnegative);
+use Schedule::Helpers qw(my_user is_nonempty is_nonnegative);
 
 use Exporter qw(import);
 
-our $VERSION = '0.9';
+our $VERSION = '0.10';
 
 sub new {
 	my ($class, $name, $ver) = @_;
@@ -119,11 +119,10 @@ sub check_options {
 
 sub default_filename {
 	my $s = shift();
-	return 1 if(defined($s->file()));
-	my $user = getpwuid($<);
-	$user = $< unless(defined($user) && ($user ne ''));
+	return '' if(defined($s->file()));
 	$s->file(File::Spec->catfile(File::Spec->tmpdir(),
-		'schedule-' . $user, 'server'))
+		'schedule-' . &my_user(), 'server'));
+	1
 }
 
 sub conn_recv {
@@ -131,7 +130,7 @@ sub conn_recv {
 	my $conn = shift();
 	my $timeout = $_[1];
 	my $len = $_[2];
-	$timeout = $s->timeout() unless(defined($timeout) && ($timeout ne ''));
+	$timeout = $s->timeout() unless(&is_nonempty($timeout));
 	if(&is_nonnegative($timeout) && $timeout &&
 		!IO::Select->new($conn)->can_read($timeout)) {
 		$s->error('timeout when reading socket');

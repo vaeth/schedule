@@ -34,6 +34,9 @@ case ${service} in
 	service_opts+=(
 {'(--exit)-e+','(-e)--exit='}'[STATUS (set exitstatus)]:exitstatus:(0)'
 {'(--job)-j+','(-j)--job='}'[JOB (set jobnumber)]:jobnumber:(0)'
+'*'{'-x+','--finished='}'[have all jobs finished (accumulative)]:job range:(\:)'
+'*'{'-o+','--ok='}'[have all jobs succeeded (accumulative)]:job range:(\:)'
+'*'{'-s+','--started='}'[have all jobs started (accumulative)]:job range:(\:)'
 '*'{'-q','--quiet'}'[be more quiet (accumulative)]'
 '1:command:->cmds'
 '*::command:_normal'
@@ -50,18 +53,21 @@ case $state in
 	)
 	[[ $service == *server ]] || cmds+=(
 	'stop-server:stop schedule-server'
-	{'q','queue'}':queue job for later execution'
+	'queue:queue job for later execution'
 	{'s','start'}':queue and run job'
 	{'sq','qs','start-or-queue'}':queue job and run it if the rest is finished'
-	{'r','run'}':start queued job sequentially even if failure'
+	'run:start queued job sequentially even if failure'
 	{'x','exec'}':start queued job sequentially until failure'
 	'bg:start queued jobs parallel and return'
 	'parallel:start queued jobs parallel and wait'
 	'wait:wait until queued running jobs are finished'
 	'list:list queued jobs'
 	'status:status of queued jobs'
+	'ok:whether all jobs have finished ok'
+	'finished:whether all jobs have finished'
+	'started:whether all jobs have started'
 	{'delete','remove'}':remove queued jobs from list'
-	'insert:shift queued jobs in list'
+	{'move','shift','insert'}':shift queued jobs in list'
 	'cancel:cancel queued jobs'
 	)
 	_describe -t commands 'command' cmds

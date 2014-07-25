@@ -12,16 +12,37 @@ use Carp;
 
 use Exporter qw(import);
 
-our @EXPORT_OK = qw(signals is_nonnegative split_quoted env_to_array);
+our @EXPORT_OK = qw(
+	signals
+	my_user
+	is_nonnegative
+	is_nonempty
+	split_quoted
+	env_to_array
+);
 our $VERSION = '0.8';
 
 sub signals {
 	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = ((@_) ? $_[0] : sub {1})
 }
 
+{ my $user = undef; # static closure
+sub my_user {
+	return $user if(defined($user));
+	my $user = getpwuid($<);
+	$user = $< unless(&is_nonempty($user));
+	$user =~ s{\W}{}g;
+	$user
+}}
+
 sub is_nonnegative {
 	my ($i) = @_;
-	(defined($i) && ($i =~ /^\d+$/))
+	(defined($i) && ($i =~ m{^\d+$}))
+}
+
+sub is_nonempty {
+	my ($i) = @_;
+	(defined($i) && ($i ne ''))
 }
 
 # Split shell-quoted string into words, substituting environment variables

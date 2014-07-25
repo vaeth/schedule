@@ -68,7 +68,11 @@ you use this project.
 	schedule sq emerge -1O @module-rebuild
 
 4. In yet another shell run
-	schedule sq shutdown -h now
+	schedule wait && shutdown -h now
+   This means that if all queue jobs have successfully finished,
+   we shut down the machine. (The exit status of "schedule wait" is the
+   maximum of the exit status of all queued jobs, that is, it "succeeds"
+   only if all jobs suceeded.)
 
 5. Finally, we run in yet another shell:
 	schedule exec
@@ -78,8 +82,7 @@ stopping if the first job returns with a nonzero exit status.
 (If we would not want the stopping, we could have used instead:
 	schedule run
 This will run all jobs sequentially, even if they return a nonzero exit status;
-The exit status of "schedule run" will be the maximum of the all others,
-that is the command "succeeds" if all jobs succeeded.)
+The exit status of "schedule run" is calculated as for "schedule wait")
 
 Now if we suddenly decide that something else must be done, e.g.,
 the same jobs should be queued in a chroot, we just press Ctrl-C in the
@@ -172,12 +175,16 @@ task of root if root has queued this task before.
 (This is not a built-in "feature" of schedule but due to the nature of the
 unix permission system. In fact, schedule-server needs no permissions at all
 to do its job [except for accessing the TCP socket], and therefore it is
-highly recommended to start it with an unprivileged user like "nobodoy";
+highly recommended to start it with an unprivileged user like "nobody";
 if started as root, schedule-server will by default change to that user.)
 
 However, you should always be aware that a possible attacker might
-change the order of you tasks.  For instance, in the above example,
+change the order of you tasks.  For instance, in the second example above
 the attacker might be able to shutdown the machine whenever he wants.
+(Even in the first example, an attacker might cancel your jobs, setting their
+exit status to 0, and thus might cause the shutdown to happen earlier,
+although in that case the attacker is not able to see the shutdown command
+since in the first example the shutdown command is not part of the queue.)
 
 You can avoid this problem by using a file socket instead of a TCP socket:
 To do this, you must start the server with the option -l, and also
