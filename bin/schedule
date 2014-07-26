@@ -6,7 +6,8 @@ use Pod::Usage;
 use File::Spec;
 use IO::Select;
 use IO::Socket; # INET or UNIX, depending on user's choice
-#use Sys::Hostname;
+#use Sys::Hostname;   # not mandatory but recommended
+#use Term::ANSIColor; # not mandatory but recommended: fallback to no color
 
 use lib '/usr/share/schedule';
 use FindBin;
@@ -17,7 +18,7 @@ if(defined($FindBin::Bin) && ($FindBin::Bin ne '')) {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule', '0.10');
+my $s = Schedule::Connect->new('schedule', '0.11');
 
 =head1 NAME
 
@@ -209,6 +210,15 @@ are considered as started).
 =item B<--exit=>I<exitstatus> or B<-e> I<exitstatus>
 
 Sets the I<exitstatus> for unscheduled jobs. The default is B<0>.
+
+=item B<--color> or B<-F>
+
+Try to color even if output is not a terminal.
+
+=item B<--no-color> or B<--nocolor> or B<-p>
+
+Do not color the output.
+Setting the environment variable B<ANSI_COLORS_DISABLED> has the same effect.
 
 =item B<--quiet> or B<-q> (accumulative)
 
@@ -441,6 +451,14 @@ sub cmd_parallel {
 	&runner('wait')
 }
 
+{ # some static closures;
+	my $col_reset = undef;
+	my $col_waiting = undef;
+	my $col_running = undef;
+	my $col_ok = undef;
+	my $col_failed = undef;
+	my $col_meta = undef;
+	my ($col_job, $col_user, $col_host);
 sub cmd_list {
 	&validate_jobs();
 	my $sent = '';
@@ -461,6 +479,10 @@ sub cmd_list {
 				$s->error("illegal job number $job");
 				next
 			}
+			my $use_color = $s->color_stdout();
+			my $reset = ($use_color ? (defined($col_reset) ?
+				$col_reset :
+				($col_reset = &my_color('reset'))) : '');
 			my $stat;
 			if($quiet) {
 				$stat = $reply
@@ -469,11 +491,23 @@ sub cmd_list {
 				$stat = $1
 			}
 			if($stat eq '-') {
-				$stat = 'waiting'
+				$stat = ($use_color ? (defined($col_waiting) ?
+					$col_waiting :
+					($col_waiting = &my_color('bold blue')))
+					: '') . 'waiting' . $reset
 			} elsif($stat eq '') {
-				$stat = 'running'
+				$stat = ($use_color ? (defined($col_running) ?
+					$col_running :
+					($col_running = &my_color('bold yellow')))
+					: '') . 'running' . $reset
 			} elsif(&is_nonnegative($stat)) {
-				&set_exitstatus($stat)
+				&set_exitstatus($stat);
+				$stat = ($stat ? (defined($col_failed) ?
+					$col_failed :
+					($col_failed = &my_color('bold red')))
+					: (defined($col_ok) ? $col_ok :
+					($col_ok = &my_color('bold green'))))
+					. $stat . $reset if($use_color)
 			} else {
 				return ''
 			}
@@ -484,6 +518,27 @@ sub cmd_list {
 			if($quiet < 2) {
 				if($quiet) {
 					print($stat . "\n")
+				} elsif($use_color) {
+					unless(defined($col_meta)) {
+						$col_meta = &my_color('cyan');
+						$col_job = &my_color('bold');
+						$col_user = &my_color('yellow');
+						$col_host = &my_color('green');
+					}
+					if($reply =~ s{\[([^@]*)@([^\]]*)\]}{}) {
+						my $user = $1;
+						my $host = $2;
+						$reply = $col_meta . '[' .
+							$col_user . $user .
+							$col_meta . '@' .
+							$col_host . $host .
+							$col_meta . ']' .
+							$reset . $reply
+					}
+					print($col_job . $job . $reset . ' ' .
+						$col_meta . '(' . $stat .
+						$col_meta . ')' . $reset .
+						' ' . $reply . "\n")
 				} else {
 					print("$job ($stat) $reply\n")
 				}
@@ -492,7 +547,7 @@ sub cmd_list {
 	}
 	return 1 unless($sent);
 	&client_send("\n")
-}
+}}
 
 sub cmd_cancel {
 	&validate_jobs();

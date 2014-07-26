@@ -4,6 +4,7 @@
 # This is part of the schedule project and under a BSD type license.
 
 package Schedule::Connect;
+#use Term::ANSIColor; # not mandatory but recommended: fallback to no color
 
 use strict;
 use warnings;
@@ -12,24 +13,33 @@ use integer;
 use Getopt::Long;
 use Pod::Usage;
 
-use Schedule::Helpers qw(my_user is_nonempty is_nonnegative);
+use Schedule::Helpers qw(/./);
 
 use Exporter qw(import);
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 sub new {
 	my ($class, $name, $ver) = @_;
+	$0 = $name;
 	my $s = bless {
 		name => $name,
 		tcp => 1,
 		addr => '127.0.0.1',
 		timeout => 10,
 		port => 8471,
+		stdout_term => undef,
+		stderr_term => undef,
+		color_stdout => undef,
+		color_stderr => undef,
+		color_force => undef,
 		file => undef
 	}, $class;
 	$s->fatal("$name version $ver differs from Schedule.pm version $VERSION")
 		if(defined($ver) && ($ver ne $VERSION));
+	my $helpers = Schedule::Helpers->VERSION;
+	$s->fatal("Schedule::Helpers $helpers differs from Schedule.pm version $VERSION")
+		if($helpers ne $VERSION);
 	$s
 }
 
@@ -63,25 +73,75 @@ sub file {
 	@_ ? $s->{file} = shift() : $s->{file}
 }
 
-sub fatal {
+sub stdout_term {
 	my $s = shift();
-	my $name = $s->name();
-	print(STDERR "$name: error: ",
-		join("\n" . (' ' x (length($name) + 9)), @_), "\n");
+	my $ret = $s->{stdout_term};
+	defined($ret) ? $ret : ($s->{stdout_term} = (-t STDOUT))
+}
+
+sub stderr_term {
+	my $s = shift();
+	my $ret = $s->{stderr_term};
+	defined($ret) ? $ret : ($s->{stderr_term} = (-t STDERR))
+}
+
+sub force_color {
+	my $s = shift();
+	@_ ? $s->{force_color} = shift() : $s->{force_color}
+}
+
+sub color_stdout {
+	my $s = shift();
+	my $ret = $s->{color_stdout};
+	return $ret if(defined($ret));
+	my $force = $s->force_color();
+	$s->{stdout_term} = ((defined($force) ? $force : ($s->stdout_term()))
+		? &use_ansicolor() : '')
+}
+
+sub color_stderr {
+	my $s = shift();
+	my $ret = $s->{color_stderr};
+	return $ret if(defined($ret));
+	my $force = $s->force_color();
+	$s->{stderr_term} = ((defined($force) ? $force : ($s->stderr_term()))
+		? &use_ansicolor() : '')
+}
+
+sub fatal {
+	&error(@_);
 	exit(1)
 }
 
 sub error {
 	my $s = shift();
 	my $name = $s->name();
-	print(STDERR "$name: error: ",
-		join("\n" . (' ' x (length($name) + 9)), @_), "\n")
+	my $namecol = '';
+	my $errcol = '';
+	my $reset = '';
+	if($s->color_stderr()) {
+		$namecol = &my_color('bold');
+		$errcol = &my_color('bold red');
+		$reset = &my_color('reset');
+	}
+	print(STDERR $namecol . $name . $reset . ': ' .
+		$errcol . 'error' . $reset . ': ',
+		join("\n" . (' ' x (length($name) + 9)), @_), "\n");
 }
 
 sub warning {
 	my $s = shift();
 	my $name = $s->name();
-	print(STDERR "$name: warning: ",
+	my $namecol = '';
+	my $warncol = '';
+	my $reset = '';
+	if($s->color_stderr()) {
+		$namecol = &my_color('bold');
+		$warncol = &my_color('bold cyan');
+		$reset = &my_color('reset');
+	}
+	print(STDERR $namecol . $name . $reset . ': ' .
+		$warncol . 'warning' . $reset . ': ',
 		join("\n" . (' ' x (length($name) + 11)), @_), "\n")
 }
 
@@ -94,6 +154,8 @@ sub get_options {
 	'version|V', sub { print($s->name(), " $VERSION\n"); exit(0) },
 	'tcp|t', sub { $s->tcp(1) },
 	'local|l', sub { $s->tcp('') },
+	'color|F', sub { $s->color_force(1) },
+	'no-color|nocolor|p', sub { $s->color_force('') },
 	'port|P=i', sub { $s->tcp(1); $s->port($_[1]) },
 	'addr|A=s', sub { $s->tcp(1); $s->addr($_[1]) },
 	'file|f=s', sub { $s->tcp(''); $s->file($_[1]) },

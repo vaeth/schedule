@@ -1,5 +1,10 @@
 # ChangeLog for schedule
 
+*schedule-0.11:
+	Martin Väth <martin at mvath.de>:
+	- Support for colored ouput (if Term::ANSIColor is available)
+	- Try to set process name more appropriately
+
 *schedule-0.10:
 	Martin Väth <martin at mvath.de>:
 	- Add --ok, --finished, --started to start-or-queue

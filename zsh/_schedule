@@ -10,8 +10,10 @@ service_opts=(
 {'(--file)-f+','(-f)--file='}'[FILE (use FILE as socket)]:socket:_file "-g*(=)"'
 {'(--addr)-A+','(-A)--addr='}'[ADDR (set address)]:port:(8471)'
 {'(--timeout)-T+','(-T)--timeout='}'[SECONDS (set timeout)]:seconds:(10)'
-{'(--tcp --local -l)-t','(-t --local -l)--tcp'}'[use tcp socket (port)]'
-{'(--local --tcp -t)-l','(-l --tcp -t)--local'}'[use unix domain socket (file)]'
+'(--local -l '{'--tcp)-t','-t)--tcp'}'[use tcp socket (port)]'
+'(--tcp -t '{'--local)-l','-l)--local'}'[use unix domain socket (file)]'
+'(--no-color -nocolor -p '{'-F)--color','(--color)-F'}'[force color on non-terminal]'
+'(--color -F '{'--no-color --nocolor)-p','--nocolor -p)--no-color','--no-color -E)--nocolor'}'[non-colored output]'
 )
 case ${service} in
 (*server)
@@ -20,14 +22,14 @@ case ${service} in
 {'(--umask)-m+','(-m)--umask='}'[UMASK (set UMASK)]:umask:(0077)'
 {'(--user)-u+','(-u)--user='}'[USER (use USER permissions)]:user name:_users'
 {'(--group)-g+','(-g)--group='}'[GROUP (use GROUP permissions)]:group name:_groups'
-{'(--uid --user -u)-U+','(-u --user -u)--uid='}'[UID (use UID permissions)]:user id:(65534)'
-{'(--gid --group -g)-G+','(-G --group -g)--gid='}'[GID (use GID permissions)]:group id:(65534)'
-{'(--change-user --no-change-user -n)-c','(-c --no-change-user -n)--change-user'}'[change user permissions]'
-{'(--change-group --no-change-group -N)-C','(-C --no-change-group -N)--change-group'}'[change group permissions]'
-{'(--change-permissions --keep-permissions -k --change-user -c --change-group -C)-K','(-K --keep-permissions -k --change-user -c --change-group -C)--change-permissions'}'[change user/group permissions]'
-{'(--no-change-user --user -u --uid -U)-n','(-n --user -u --uid -U)--no-change-user'}'[do not change user permissions]'
-{'(--no-change-group --group -g --gid -G)-N','(-N --group -g --gid -G)--no-change-group'}'[do not change group permissions]'
-{'(--keep-permissions --change-permissions -K --user -u --uid -U --group -g --gid -G --no-change-user -n)-k','(-k --change-permissions -K --user -u --uid -U --group -g --gid -G --no-change-user -n)--keep-permissions'}'[do not change user/group permissions]'
+'(--user -u '{'--uid)-U+','-u)--uid='}'[UID (use UID permissions)]:user id:(65534)'
+'(--group -g '{'--gid)-G+','-G)--gid='}'[GID (use GID permissions)]:group id:(65534)'
+'(--no-change-user -n '{'--change-user)-c','-c)--change-user'}'[change user permissions]'
+'(--no-change-group -N '{'--change-group)-C','-C)--change-group'}'[change group permissions]'
+'(--keep-permissions -k --change-user -c --change-group -C '{'--change-permissions)-K','-K)--change-permissions'}'[change user/group permissions]'
+'(--user -u --uid -U '{'--no-change-user)-n','-n)--no-change-user'}'[do not change user permissions]'
+'(--group -g --gid -G '{'--no-change-group)-N','-N)--no-change-group'}'[do not change group permissions]'
+'(--change-permissions -K --user -u --uid -U --group -g --gid -G --no-change-user -n '{'--keep-permissions)-k','-k)--keep-permissions'}'[do not change user/group permissions]'
 '1:command:->cmds'
 );;
 (*)
@@ -39,7 +41,7 @@ case ${service} in
 '*'{'-s+','--started='}'[have all jobs started (accumulative)]:job range:(\:)'
 '*'{'-q','--quiet'}'[be more quiet (accumulative)]'
 '1:command:->cmds'
-'*::command:_normal'
+'2::command:->normal'
 );;
 esac
 _arguments -C -s -S -A '-*' : $service_opts
@@ -71,6 +73,11 @@ case $state in
 	'cancel:cancel queued jobs'
 	)
 	_describe -t commands 'command' cmds
+	ret=$?;;
+(*normal)
+	shift $CURRENT words
+	CURRENT=1
+	_normal
 	ret=$?;;
 esac
 return ret

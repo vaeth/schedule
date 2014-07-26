@@ -4,6 +4,7 @@
 # This is part of the schedule project and under a BSD type license.
 
 package Schedule::Helpers;
+#use Term::ANSIColor; # not mandatory but recommended: fallback to no color
 
 use strict;
 use warnings;
@@ -15,12 +16,14 @@ use Exporter qw(import);
 our @EXPORT_OK = qw(
 	signals
 	my_user
+	use_ansicolor
+	my_color
 	is_nonnegative
 	is_nonempty
 	split_quoted
 	env_to_array
 );
-our $VERSION = '0.8';
+our $VERSION = '0.11';
 
 sub signals {
 	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = ((@_) ? $_[0] : sub {1})
@@ -34,6 +37,20 @@ sub my_user {
 	$user =~ s{\W}{}g;
 	$user
 }}
+
+{ my $ansicolor = undef; # A closure static variable
+sub use_ansicolor {
+	return $ansicolor if(defined($ansicolor));
+	eval {
+		require Term::ANSIColor;
+		Term::ANSIColor->import()
+	};
+	$ansicolor = !$@
+}}
+
+sub my_color {
+	&use_ansicolor() ? color(@_) : ''
+}
 
 sub is_nonnegative {
 	my ($i) = @_;
