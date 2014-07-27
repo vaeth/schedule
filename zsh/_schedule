@@ -36,6 +36,8 @@ case ${service} in
 	service_opts+=(
 {'(--exit)-e+','(-e)--exit='}'[STATUS (set exitstatus)]:exitstatus:(0)'
 {'(--job)-j+','(-j)--job='}'[JOB (set jobnumber)]:jobnumber:(0)'
+{'(--no-user --nouser)-u','(--nouser -u)--no-user','(--no-user -u)--nouser'}'[Suppress output of user]'
+{'(--no-command --nocommand)-c','(--nocommand -c)--no-command','(--no-command -c)--nocommand'}'[Suppress output of command]'
 '*'{'-x+','--finished='}'[have all jobs finished (accumulative)]:job range:(\:)'
 '*'{'-o+','--ok='}'[have all jobs succeeded (accumulative)]:job range:(\:)'
 '*'{'-s+','--started='}'[have all jobs started (accumulative)]:job range:(\:)'

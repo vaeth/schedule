@@ -18,7 +18,7 @@ if(defined($FindBin::Bin) && ($FindBin::Bin ne '')) {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule', '0.11');
+my $s = Schedule::Connect->new('schedule', '0.12');
 
 =head1 NAME
 
@@ -207,6 +207,16 @@ If used with B<start-or-queue>, B<ok>, B<finished>, B<started>,
 check whether the listed jobs have been started (finished jobs
 are considered as started).
 
+=item B<--no-user> or B<--nouser> or B<-u>
+
+If this option is specified, B<schedule list> will suppress the output of
+user and hostname.
+
+=item B<--no-command> or B<--nocommand> or B<-c>
+
+If this option is specified, B<schedule list> will suppress the output of
+the queued command.
+
 =item B<--exit=>I<exitstatus> or B<-e> I<exitstatus>
 
 Sets the I<exitstatus> for unscheduled jobs. The default is B<0>.
@@ -265,34 +275,55 @@ If a job has already been started, the command will wait for its finishing.
 If it already has been finished it is not started again, but the exit status
 is taken into account.
 
+The command is not race-free, that is, it is somewhat similar to calling
+B<schedule run> I<job> for each I<job> separately (for job ranges of the
+type B<:> or I<start>B<:> the end being changed dynamically).
+
+This is intentional so that modification of the job queue has effect
+to the command while it is running.
+
 =item B<exec> I<jobs>
 
 This is like B<schdeule run> but breaks further execution on the first job
 with nonzero exit status. Note that also finished jobs can have nonzero
 exit status.
 
+Similarly to B<run>, this command is not race-free.
+
 =item B<bg> I<jobs>
 
 This is like B<schedule run> but starts all non-started jobs in parallel
 and then returns.
+
+Similarly to B<run>, this command is not race-free (although a race can
+only happen if you simultaneously try to run other commands with B<schedule>
+for which there usually is no reason, usually)
 
 =item B<wait> I<jobs>
 
 This waits until all specified jobs have been finished and
 returns the largest exit status.
 
+Similarly to B<run>, this command is not race-free,
+This is intentional so that modification of the job queue has effect
+to the command while it is running.
+
 =item B<parallel> I<jobs>
 
-This is like first running B<schedule bg> and then B<schedule wait>.
+This is like first running B<schedule bg> and then B<schedule wait>
+(including the race between both commands).
 
 =item B<list> I<jobs>
 
 Lists the command line of the queued jobs (unless B<--quiet> is used once).
 Outputs whether the job are waiting/running/finished, and in the latter case
 which exit status they have (unless B<--quiet> is used twice).
-Normally the exit stauts of this command is 0, but if B<--quiet> is used twice
+
+Normally the exit status of this command is 0, but if B<--quiet> is used twice
 or more often, the exit status is the largest exit status of the listed
 commands.
+
+Similarly to B<run>, this command is not race-free.
 
 =item B<status> I<jobs>
 
@@ -300,10 +331,11 @@ This is like B<--quiet> B<list>.
 
 =item B<ok>|B<finished>|B<started>
 
-This is a more script-friendly form of B<status>, usually without any output:
-Returns with exit status 0 if all jobs specified through the options
+This is a more script-friendly and race-free form of B<status>,
+without any output (except in error cases):
+It returns with exit status 0 if all jobs specified through the options
 B<--ok>, B<--finished>, B<--started> meet the corresponding requirements.
-(The I<jobs> arguments arequivalent to using the corresponding
+(The I<jobs> arguments are quivalent to using the corresponding
 B<--ok>, B<--finished>, or B<--started> options with these arguments,
 respectively.)
 If none of these options is specified and no I<jobs> argument is given,
@@ -351,6 +383,8 @@ Martin VE<auml>th E<lt>martin@mvath.deE<gt>
 
 my $quiet = 0;
 my $cancel = 0;
+my $nouser = '';
+my $nocommand = '';
 my $destjob = 0;
 my @ok = ();
 my @finished = ();
@@ -458,7 +492,9 @@ sub cmd_parallel {
 	my $col_ok = undef;
 	my $col_failed = undef;
 	my $col_meta = undef;
-	my ($col_job, $col_user, $col_host);
+	my $col_job;
+	my $col_user = undef;
+	my $col_host;
 sub cmd_list {
 	&validate_jobs();
 	my $sent = '';
@@ -522,23 +558,39 @@ sub cmd_list {
 					unless(defined($col_meta)) {
 						$col_meta = &my_color('cyan');
 						$col_job = &my_color('bold');
+					}
+					unless($nouser || defined($col_user)) {
 						$col_user = &my_color('yellow');
 						$col_host = &my_color('green');
 					}
-					if($reply =~ s{\[([^@]*)@([^\]]*)\]}{}) {
-						my $user = $1;
-						my $host = $2;
-						$reply = $col_meta . '[' .
-							$col_user . $user .
+					if($reply =~ s{\[([^@]*)@([^\]]*)\]\s+}{}) {
+						$reply = ($nocommand ? '' :
+							' ' . $reply);
+						$reply = ' ' . $col_meta . '[' .
+							$col_user . $1 .
 							$col_meta . '@' .
-							$col_host . $host .
+							$col_host . $2 .
 							$col_meta . ']' .
 							$reset . $reply
+							unless($nouser)
+					} elsif($nocommand) {
+						$reply = ''
 					}
 					print($col_job . $job . $reset . ' ' .
 						$col_meta . '(' . $stat .
 						$col_meta . ')' . $reset .
-						' ' . $reply . "\n")
+						$reply . "\n")
+				} elsif($nouser || $nocommand) {
+					if($nouser && $nocommand) {
+						print("$job ($stat)\n")
+					} elsif($reply =~ s{(\[[^@]*@[^\]]*\])\s+}{}) {
+						$reply = $1 if($nocommand);
+						print("$job ($stat) $reply\n")
+					} elsif($nocommand) {
+						print("$job ($stat)\n")
+					} else {
+						print("$job ($stat) $reply\n")
+					}
 				} else {
 					print("$job ($stat) $reply\n")
 				}
@@ -798,6 +850,8 @@ if(exists($ENV{'SCHEDULE_OPTS'})) {
 
 $s->get_options(
 	'exit|e=i', \$cancel,
+	'no-user|nouser|u', \$nouser,
+	'no-command|nocommand|c', \$nocommand,
 	'job|j=i', \$destjob,
 	'ok|o=s', \@ok,
 	'finished|x=s', \@finished,

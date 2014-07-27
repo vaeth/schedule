@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-0.12:
+	Martin Väth <martin at mvath.de>:
+	- Introduce --no-user --no-command to customize list output
+
 *schedule-0.11:
 	Martin Väth <martin at mvath.de>:
 	- Support for colored ouput (if Term::ANSIColor is available)
