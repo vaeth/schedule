@@ -19,7 +19,7 @@ if(defined($FindBin::Bin) && ($FindBin::Bin ne '')) {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule-server', '0.12');
+my $s = Schedule::Connect->new('schedule-server', '0.13');
 
 =head1 NAME
 

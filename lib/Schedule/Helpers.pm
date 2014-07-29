@@ -23,7 +23,7 @@ our @EXPORT_OK = qw(
 	split_quoted
 	env_to_array
 );
-our $VERSION = '0.12';
+our $VERSION = '0.13';
 
 sub signals {
 	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = ((@_) ? $_[0] : sub {1})

@@ -1,6 +1,7 @@
 #compdef schedule schedule-server
-local curcontext="$curcontext" state state_descr line
+local curcontext="$curcontext" state state_descr line expl
 typeset -A opt_args
+integer NORMARG
 local service_opts
 service_opts=(
 '(1 * -)'{'--help','-h'}'[print a brief help]'
@@ -43,10 +44,10 @@ case ${service} in
 '*'{'-s+','--started='}'[have all jobs started (accumulative)]:job range:(\:)'
 '*'{'-q','--quiet'}'[be more quiet (accumulative)]'
 '1:command:->cmds'
-'2::command:->normal'
+'*::command:->rest'
 );;
 esac
-_arguments -C -s -S -A '-*' : $service_opts
+_arguments -n -C -s -S -A '-*' : $service_opts
 local ret=$?
 case $state in
 (*cmds)
@@ -76,10 +77,22 @@ case $state in
 	)
 	_describe -t commands 'command' cmds
 	ret=$?;;
-(*normal)
-	shift $CURRENT words
-	CURRENT=1
-	_normal
+(*rest)
+	local cmd=
+	if [[ $NORMARG -gt 1 ]]
+	then	cmd=$words[$((NORMARG-1))]
+		shift $NORMARG words
+		((CURRENT-=NORMARG-1))
+	fi
+	case $cmd in
+	(*q*|s|start)
+		_normal;;
+	(sto*)
+		false;;
+	(*)
+		_description jobrange expl 'job range'
+		compadd "$expl[@]" - : "1:$(schedule status 2>/dev/null | wc -l)"
+	esac
 	ret=$?;;
 esac
 return ret

@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-0.13:
+	Martin Väth <martin at mvath.de>:
+	- Fix zsh completion
+
 *schedule-0.12:
 	Martin Väth <martin at mvath.de>:
 	- Introduce --no-user --no-command to customize list output
