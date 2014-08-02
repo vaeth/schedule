@@ -17,7 +17,7 @@ use Schedule::Helpers qw(/./);
 
 use Exporter qw(import);
 
-our $VERSION = '0.13';
+our $VERSION = '0.14';
 
 sub new {
 	my ($class, $name, $ver) = @_;
@@ -85,16 +85,16 @@ sub stderr_term {
 	defined($ret) ? $ret : ($s->{stderr_term} = (-t STDERR))
 }
 
-sub force_color {
+sub color_force {
 	my $s = shift();
-	@_ ? $s->{force_color} = shift() : $s->{force_color}
+	@_ ? $s->{color_force} = shift() : $s->{color_force}
 }
 
 sub color_stdout {
 	my $s = shift();
 	my $ret = $s->{color_stdout};
 	return $ret if(defined($ret));
-	my $force = $s->force_color();
+	my $force = $s->color_force();
 	$s->{stdout_term} = ((defined($force) ? $force : ($s->stdout_term()))
 		? &use_ansicolor() : '')
 }
@@ -103,7 +103,7 @@ sub color_stderr {
 	my $s = shift();
 	my $ret = $s->{color_stderr};
 	return $ret if(defined($ret));
-	my $force = $s->force_color();
+	my $force = $s->color_force();
 	$s->{stderr_term} = ((defined($force) ? $force : ($s->stderr_term()))
 		? &use_ansicolor() : '')
 }

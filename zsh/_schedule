@@ -37,14 +37,17 @@ case ${service} in
 	service_opts+=(
 {'(--exit)-e+','(-e)--exit='}'[STATUS (set exitstatus)]:exitstatus:(0)'
 {'(--job)-j+','(-j)--job='}'[JOB (set jobnumber)]:jobnumber:(0)'
-{'(--no-user --nouser)-u','(--nouser -u)--no-user','(--no-user -u)--nouser'}'[Suppress output of user]'
+'(--no-host --nohost -H '{'--no-user --nouser)-u','--nouser -u)--no-user','--no-user -u)--nouser'}'[Suppress output of user]'
+'(--no-user --nouser -u '{'--no-host --nohost)-H','--nohost -H)--no-host','--no-host -H)--nohost'}'[Suppress output of HOSTTEXT]'
+{'(--no-dir --nodir)-D','(--nodir -D)--no-dir','(--no-dir -D)--nodir'}'[Suppress output of PWD]'
+{'(--keep-dir --keepdir)-d','(--keep-dir -d)--keep-dir','(--keep-dir -d)--keepdir'}'[Do not shortcut CWD]'
 {'(--no-command --nocommand)-c','(--nocommand -c)--no-command','(--no-command -c)--nocommand'}'[Suppress output of command]'
 '*'{'-x+','--finished='}'[have all jobs finished (accumulative)]:job range:(\:)'
 '*'{'-o+','--ok='}'[have all jobs succeeded (accumulative)]:job range:(\:)'
 '*'{'-s+','--started='}'[have all jobs started (accumulative)]:job range:(\:)'
 '*'{'-q','--quiet'}'[be more quiet (accumulative)]'
 '1:command:->cmds'
-'*::command:->rest'
+'*:command:->rest'
 );;
 esac
 _arguments -n -C -s -S -A '-*' : $service_opts
@@ -80,19 +83,24 @@ case $state in
 (*rest)
 	local cmd=
 	if [[ $NORMARG -gt 1 ]]
-	then	cmd=$words[$((NORMARG-1))]
-		shift $NORMARG words
-		((CURRENT-=NORMARG-1))
+	then	cmd=$words[$((NORMARG))]
+		if [[ $NORMARG -gt $#words ]]
+		then	words=()
+			CURRENT=1
+		else	shift $NORMARG words
+			((CURRENT-=NORMARG))
+		fi
 	fi
 	case $cmd in
 	(*q*|s|start)
-		_normal;;
+		_normal
+		ret=$?;;
 	(sto*)
-		false;;
+		;;
 	(*)
 		_description jobrange expl 'job range'
 		compadd "$expl[@]" - : "1:$(schedule status 2>/dev/null | wc -l)"
-	esac
-	ret=$?;;
+		ret=$?;;
+	esac;;
 esac
 return ret

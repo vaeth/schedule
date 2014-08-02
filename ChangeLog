@@ -1,5 +1,11 @@
 # ChangeLog for schedule
 
+*schedule-0.14:
+	Martin Väth <martin at mvath.de>:
+	- Support CWD; introduce --nodir
+	- Support HOSTTEXT (default to uname -m); introduce --nohost
+	- Improve zsh completion
+
 *schedule-0.13:
 	Martin Väth <martin at mvath.de>:
 	- Fix zsh completion

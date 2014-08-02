@@ -2,6 +2,7 @@
 use strict;
 use warnings;
 use integer;
+use Cwd;
 use Pod::Usage;
 use File::Spec;
 use IO::Select;
@@ -18,7 +19,7 @@ if(defined($FindBin::Bin) && ($FindBin::Bin ne '')) {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule', '0.13');
+my $s = Schedule::Connect->new('schedule', '0.14');
 
 =head1 NAME
 
@@ -210,7 +211,25 @@ are considered as started).
 =item B<--no-user> or B<--nouser> or B<-u>
 
 If this option is specified, B<schedule list> will suppress the output of
-user and hostname.
+user, hostname, and B<HOSTTEXT>.
+
+=item B<--no-host> or B<--nohost> or B<-H>
+
+If this option is specified, B<schedule list> will suppress the output of
+B<HOSTTEXT>. By default, the value of B<HOSTTEXT> is output in braces;
+this can be used to indicate e.g. whether the command is scheduled from
+a chroot (and from which). If B<HOSTTEXT> is not specified, the output
+of B<uname -m> is used as a default (if nonempty).
+
+=item B<--no-dir> or B<--nodir> or B<-D>
+
+If this option is specified, B<schedule list> will suppress the output of
+the current working directory for the scheduled command.
+
+=item B<--keep-dir> or B<--keepdir> or B<-d>
+
+If this option is specified, the current working directory is not shortcut
+using the B<HOME> environment variable.
 
 =item B<--no-command> or B<--nocommand> or B<-c>
 
@@ -384,7 +403,10 @@ Martin VE<auml>th E<lt>martin@mvath.deE<gt>
 my $quiet = 0;
 my $cancel = 0;
 my $nouser = '';
+my $nohost = '';
+my $nodir = '';
 my $nocommand = '';
+my $keepdir = '';
 my $destjob = 0;
 my @ok = ();
 my @finished = ();
@@ -395,6 +417,18 @@ my @started = ();
 my $unique = undef;
 my $socket = undef;
 my $exitstatus = 0;
+my $devnull = File::Spec->devnull();
+
+my $col_reset = undef;
+my $col_waiting = undef;
+my $col_running = undef;
+my $col_ok = undef;
+my $col_failed = undef;
+my $col_meta = undef;
+my $col_job;
+my $col_user = undef;
+my $col_host;
+my $col_dir = undef;
 
 #
 # Commands
@@ -428,7 +462,6 @@ sub cmd_have {
 	1
 }
 
-
 sub cmd_queue {
 	my ($runmode) = @_;
 	my $have = ($runmode eq 'start-or-queue');
@@ -438,8 +471,9 @@ sub cmd_queue {
 	}
 	return '' unless(&openclient());
 	&signals();
-	my $cmd = '[' . &my_user() . '@' . &my_hostname() . '] ' .
-		&join_quoted(@ARGV);
+	my $cmd = '[' .  &my_user() . '@' . &my_hostname() .
+		'(' . &my_hosttext() . ')' .
+		&my_cwd() . ']' . &join_quoted(@ARGV);
 	my $success = &client_send("$runmode\n$destjob\n" . length($cmd));
 	$success = '' unless(&client_recv($unique));
 	if($have) {
@@ -485,7 +519,7 @@ sub cmd_parallel {
 	&runner('wait')
 }
 
-{ # some static closures;
+{ # Some static variables:
 	my $col_reset = undef;
 	my $col_waiting = undef;
 	my $col_running = undef;
@@ -493,8 +527,6 @@ sub cmd_parallel {
 	my $col_failed = undef;
 	my $col_meta = undef;
 	my $col_job;
-	my $col_user = undef;
-	my $col_host;
 sub cmd_list {
 	&validate_jobs();
 	my $sent = '';
@@ -551,54 +583,62 @@ sub cmd_list {
 				return '' unless(&client_send("\n") &&
 					&client_recv($reply, undef, $reply))
 			}
-			if($quiet < 2) {
-				if($quiet) {
-					print($stat . "\n")
-				} elsif($use_color) {
-					unless(defined($col_meta)) {
-						$col_meta = &my_color('cyan');
-						$col_job = &my_color('bold');
-					}
-					unless($nouser || defined($col_user)) {
-						$col_user = &my_color('yellow');
-						$col_host = &my_color('green');
-					}
-					if($reply =~ s{\[([^@]*)@([^\]]*)\]\s+}{}) {
-						$reply = ($nocommand ? '' :
-							' ' . $reply);
-						$reply = ' ' . $col_meta . '[' .
-							$col_user . $1 .
-							$col_meta . '@' .
-							$col_host . $2 .
-							$col_meta . ']' .
-							$reset . $reply
-							unless($nouser)
-					} elsif($nocommand) {
-						$reply = ''
-					}
-					print($col_job . $job . $reset . ' ' .
-						$col_meta . '(' . $stat .
-						$col_meta . ')' . $reset .
-						$reply . "\n")
-				} elsif($nouser || $nocommand) {
-					if($nouser && $nocommand) {
-						print("$job ($stat)\n")
-					} elsif($reply =~ s{(\[[^@]*@[^\]]*\])\s+}{}) {
-						$reply = $1 if($nocommand);
-						print("$job ($stat) $reply\n")
-					} elsif($nocommand) {
-						print("$job ($stat)\n")
-					} else {
-						print("$job ($stat) $reply\n")
-					}
-				} else {
-					print("$job ($stat) $reply\n")
-				}
+			next unless($quiet < 2);
+			if($quiet) {
+				print($stat . "\n");
+				next
+			}
+			if($use_color && !defined($col_meta)) {
+				$col_meta = &my_color('cyan');
+				$col_job = &my_color('bold')
+			}
+			if($reply =~ s{\[([^@]*)@([^\(]*)\(([^\)]*)\)([^\]]*)\]}{}) {
+				$reply = &format_cmd($use_color, $1, $2, $3, $4, $reply)
+			} elsif($nocommand) {
+				$reply = ''
+			}
+			if($use_color) {
+				print($col_job, $job, $reset, ' ',
+				$col_meta, '(', $stat, $col_meta, ')',
+				$reset, $reply, "\n")
+			} else {
+				print($job, ' (', $stat, ')', $reply, "\n")
 			}
 		}
 	}
 	return 1 unless($sent);
 	&client_send("\n")
+}
+# Subfunction of cmd_list to format "[user@host(hosttext)dir] cmd"
+# In case $use_color, the variables $col_reset, $col_meta are expected.
+  # Some static variables:
+	my $col_user = undef;
+	my $col_host;
+	my $col_dir = undef;
+sub format_cmd {
+	my ($use_color, $user, $host, $hosttext, $dir, $cmd) = @_;
+	$cmd = ($nocommand ? '' : ' ' . $cmd);
+	my $nopwd = ($nodir || ($dir eq ''));
+	return $cmd if($nouser && $nopwd);
+	if($use_color) {
+		unless($nouser || defined($col_user)) {
+			$col_user = &my_color('yellow');
+			$col_host = &my_color('green')
+		}
+		unless($nopwd || defined($col_dir)) {
+			$col_dir = &my_color('bold green')
+		}
+	}
+	my $reply = ($use_color ? (' ' . $col_meta . '[') : ' [');
+	$reply .= ($use_color ? ($col_user . $user . $col_meta . '@' .
+		$col_host . $host . $col_meta) : ($user . '@' . $host)) .
+		(($nohost || ($hosttext eq '')) ? ($nopwd ? '' : ':' )
+		: ('(' . $hosttext . ')')) unless($nouser);
+	$reply .= ($use_color ? ($col_dir . $dir . $col_reset . $col_meta)
+		: $dir) unless($nopwd);
+	$reply .= ']';
+	$reply .= $col_reset if($use_color);
+	$reply . $cmd
 }}
 
 sub cmd_cancel {
@@ -741,6 +781,7 @@ sub cancel_job {
 	exit($cancel)
 }
 
+
 # Check whether @ARGV are valid job specifications.
 # Let @ARGV = (':') if there are none and no argument is passed.
 
@@ -834,8 +875,46 @@ sub my_hostname {
 		};
 		$hostname = '' unless($@ && defined($hostname))
 	}
-	$hostname =~ s{\s}{ }g;
+	$hostname =~ s{[\(\)\[\]\:]}{.}g;
 	$hostname
+}}
+
+{ my $hosttext = undef; # a static closure
+sub my_hosttext {
+	return $hosttext if(defined($hosttext));
+	$hosttext = $ENV{'HOSTTEXT'};
+	unless(defined($hosttext)) {
+		my $olderr = undef;
+		$olderr = undef unless(open($olderr, '>&', \*STDERR) && open(STDERR, '>', $devnull));
+		$hosttext = `uname -m`;
+		open(STDERR, '>&', $olderr) if(defined($olderr));
+		$hosttext = '' unless(defined($hosttext));
+		chomp($hosttext)
+	}
+	$hosttext =~ s{[\(\)\[\]]}{.}g;
+	$hosttext
+}}
+
+{ my $cwd = undef; # a static closure
+sub my_cwd {
+	return $cwd if(defined($cwd));
+	$cwd = getcwd();
+	$cwd = '' unless(defined($cwd));
+	unless($keepdir) {
+		my $home = $ENV{'HOME'};
+		if(&is_nonempty($home)) {
+			if($home eq $cwd) {
+				$cwd = '~'
+			} else {
+				my $len = length($home);
+				$cwd = '~' . substr($cwd, $len) if(
+				($len < length($cwd)) &&
+				(substr($cwd, 0, $len + 1) eq ($home . '/')))
+			}
+		}
+	}
+	$cwd =~ s{[\[\]]}{?}g;
+	$cwd
 }}
 
 #
@@ -851,7 +930,10 @@ if(exists($ENV{'SCHEDULE_OPTS'})) {
 $s->get_options(
 	'exit|e=i', \$cancel,
 	'no-user|nouser|u', \$nouser,
+	'no-host|nohost|H', \$nohost,
+	'no-dir|nodir|D', \$nodir,
 	'no-command|nocommand|c', \$nocommand,
+	'keep-dir|keepdir|d', \$keepdir,
 	'job|j=i', \$destjob,
 	'ok|o=s', \@ok,
 	'finished|x=s', \@finished,
