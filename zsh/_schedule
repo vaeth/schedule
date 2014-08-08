@@ -11,6 +11,8 @@ service_opts=(
 {'(--file)-f+','(-f)--file='}'[FILE (use FILE as socket)]:socket:_file "-g*(=)"'
 {'(--addr)-A+','(-A)--addr='}'[ADDR (set address)]:port:(8471)'
 {'(--timeout)-T+','(-T)--timeout='}'[SECONDS (set timeout)]:seconds:(10)'
+{'(--password)-y+','(-y)--password='}'[PASSWORD (encrypt using PASSWORD)]:password:(p P)'
+'*'{'-Y+','--passfile='}'[FILE (encrypt using password from FILE)]:file:_files'
 '(--local -l '{'--tcp)-t','-t)--tcp'}'[use tcp socket (port)]'
 '(--tcp -t '{'--local)-l','-l)--local'}'[use unix domain socket (file)]'
 '(--no-color -nocolor -p '{'-F)--color','(--color)-F'}'[force color on non-terminal]'
@@ -99,7 +101,7 @@ case $state in
 		;;
 	(*)
 		_description jobrange expl 'job range'
-		compadd "$expl[@]" - : "1:$(schedule status 2>/dev/null | wc -l)"
+		compadd "$expl[@]" - : '1:'
 		ret=$?;;
 	esac;;
 esac

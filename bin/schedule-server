@@ -9,17 +9,19 @@ use IO::Select;
 use IO::Socket; # INET or UNIX, depending on user's choice
 #use Sys::Hostname;   # not mandatory but recommended
 #use Term::ANSIColor; # not mandatory but recommended: fallback to no color
+#use Crypt::Rijndael; # needed for password protection
+#use Digest::SHA;     # needed for password protection
 
 use lib '/usr/share/schedule';
 use FindBin;
-if(defined($FindBin::Bin) && ($FindBin::Bin ne '')) {
+if(($FindBin::Bin // '') ne '') {
 	use lib File::Spec->catdir($FindBin::Bin, File::Spec->updir(), 'lib');
 	use lib File::Spec->catdir($FindBin::Bin, 'lib');
 	use lib $FindBin::Bin
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule-server', '0.14');
+my $s = Schedule::Connect->new('schedule-server', '0.15');
 
 =head1 NAME
 
@@ -114,10 +116,32 @@ This option implies B<--tcp> (unless overridden later on).
 =item B<--addr=>I<addr> or B<-A> I<addr>
 
 Bind to I<addr>. The default is 127.0.0.1 (localhost only).
-If you want to liste worldwide, use B<--addr 0.0.0.0> but be aware about
+If you want to listen worldwide, use B<--addr 0.0.0.0> but be aware about
 the security implications: Everybody will be able to start/see/re-order/cancel
-your tasks!
+your tasks unless you use encryption with B<--passfile>.
 This option implies B<--tcp> (unless overridden later on).
+
+=item B<--passfile=>I<password-file> or B<-Y> I<password-file>
+
+Read the first line from I<password-file> (without the newline)
+and use it as a password to encrypt communication between B<schedule>
+and B<schedule-server>. Both programs must use the same password for a
+succesfull communication.
+
+The I<password-file> is read before permissions are dropped so that
+you can (and should) restrict read-permissions on this file.
+
+This option can be used accumulatively:
+The first existing I<password-file> with a nonempty first line is used.
+If no such file is found, this option is tacitly ignored.
+This is to make it safe to specify this option in B<SCHEDULE_SERVER_OPTS>
+or B<SCHEDULE_OPTS> if no corresponding file exists.
+
+=item B<--password=>I<password> or B<-y> I<password>
+
+This is like B<--passfile>, with the difference that you specify the
+password directly. This option is dangerous, because many systems allow
+other users to see the commandline/environment (hence the password is visible).
 
 =item B<--keep-permissions> or B<-k>
 
@@ -266,8 +290,11 @@ sub serverloop {
 		my $data;
 		$data = '' unless($s->conn_recv($conn, $data));
 		$data =~ s{^([^\n]*)\n?}{};
-		my $cmd = (defined($1) ? $1 : '');
-		if(($cmd eq 'queue') || ($cmd eq 'start') || ($cmd eq 'start-or-queue')) {
+		my $cmd = $1 // '';
+		if($cmd eq 'version') {
+			$s->conn_send($conn, $s->version());
+			redo
+		} elsif(($cmd eq 'queue') || ($cmd eq 'start') || ($cmd eq 'start-or-queue')) {
 			my $send;
 			if($cmd eq 'start-or-queue') {
 				$data =~ s{$have_re}{};
@@ -315,13 +342,12 @@ sub serverloop {
 			if(defined($j)) {
 				&send_finish($j, $data);
 				my $stat = &get_status($j);
-				&set_status($j, $data)
-					if(defined($stat) && ($stat eq ''))
+				&set_status($j, $data) if(($stat // 1) eq '')
 			}
 		} elsif($cmd eq 'cancel') {
 			while() {
 				$data =~ s{^(\d+)\n}{};
-				my $stat = (defined($1) ? $1 : 0);
+				my $stat = ($1 // 0);
 				my $index = &my_index($data);
 				my $reply = &indexname($index);
 				if($reply ne '0') {
@@ -341,8 +367,7 @@ sub serverloop {
 				my $reply2 = undef;
 				if($reply ne '0') {
 					my $job = $joblist->[$i];
-					my $stat = &get_status($job);
-					$stat = (defined($stat) ? $stat : '-');
+					my $stat = (&get_status($job) // '-');
 					$reply .= "\n$stat";
 					if($cmd eq 'list') {
 						$reply2 = &get_cmd($job);
@@ -382,7 +407,7 @@ sub serverloop {
 			}
 		} elsif($cmd eq 'remove') {
 			$data =~ s{^(\d+)\n}{};
-			my $stat = (defined($1) ? $1 : 0);
+			my $stat = ($1 // 0);
 			my @fail = ();
 			for my $i (&unique_indices($data)) {
 				my $job = $joblist->[$i];
@@ -400,7 +425,7 @@ sub serverloop {
 			$s->conn_send($conn, join(' ', @fail) . "\n")
 		} elsif($cmd eq 'stop') {
 			$data =~ m{^(\d+)};
-			my $stat = (defined($1) ? $1 : 0);
+			my $stat = ($1 // 0);
 			my @fail = &send_exit($stat);
 			my $ret = $s->conn_send($conn, join(' ', @fail) . "\n");
 			$ret = '' if(@fail);
@@ -516,8 +541,7 @@ sub index_from_unique {
 sub unique_indices {
 	my %have = ();
 	my @ret = ();
-	my ($ind) = @_;
-	$ind = '' unless(defined($ind));
+	my $ind = (shift() // '');
 	for my $name (split(' ', $_[0])) {
 		if($name =~ m{^(\d*)\:(\d*)$}) {
 			my $i = (($1 eq '') ? 1 : $1);
@@ -552,14 +576,13 @@ sub indexname {
 # If second arg is 1, let 0 count from end of list + 1.
 
 sub my_index {
-	my ($arg, $end) = @_;
+	my $arg = (shift() // 0);
 	my $max = scalar(@$joblist);
-	$arg = 0 unless(defined($arg));
 	if($arg =~ m{^u(.*)$}) {
-		my $i = &index_from_unique($1);
-		return (defined($i) ? $i : 0)
+		return (&index_from_unique($1) // 0)
 	}
 	$arg = 0 unless($arg =~ m{^[+-]?\d+$});
+	my $end = shift();
 	--$max if(&is_nonempty($end) && ($end == 0));
 	return $max if($arg > $max);
 	return ($arg - 1) if($arg > 0);

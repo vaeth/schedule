@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-0.15:
+	Martin Väth <martin at mvath.de>:
+	- Introduce encryption: --password --passfile
+
 *schedule-0.14:
 	Martin Väth <martin at mvath.de>:
 	- Support CWD; introduce --nodir

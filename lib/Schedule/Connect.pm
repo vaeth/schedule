@@ -5,6 +5,8 @@
 
 package Schedule::Connect;
 #use Term::ANSIColor; # not mandatory but recommended: fallback to no color
+#use Crypt::Rijndael; # needed for password protection
+#use Digest::SHA;     # needed for password protection
 
 use strict;
 use warnings;
@@ -17,7 +19,7 @@ use Schedule::Helpers qw(/./);
 
 use Exporter qw(import);
 
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 
 sub new {
 	my ($class, $name, $ver) = @_;
@@ -28,6 +30,7 @@ sub new {
 		addr => '127.0.0.1',
 		timeout => 10,
 		port => 8471,
+		password => undef,
 		stdout_term => undef,
 		stderr_term => undef,
 		color_stdout => undef,
@@ -41,6 +44,10 @@ sub new {
 	$s->fatal("Schedule::Helpers $helpers differs from Schedule.pm version $VERSION")
 		if($helpers ne $VERSION);
 	$s
+}
+
+sub version {
+	$VERSION
 }
 
 sub name {
@@ -68,6 +75,11 @@ sub port {
 	@_ ? $s->{port} = shift() : $s->{port}
 }
 
+sub password {
+	my $s = shift();
+	@_ ? $s->{password} = shift() : $s->{password}
+}
+
 sub file {
 	my $s = shift();
 	@_ ? $s->{file} = shift() : $s->{file}
@@ -75,14 +87,12 @@ sub file {
 
 sub stdout_term {
 	my $s = shift();
-	my $ret = $s->{stdout_term};
-	defined($ret) ? $ret : ($s->{stdout_term} = (-t STDOUT))
+	$s->{stdout_term} // ($s->{stdout_term} = (-t STDOUT))
 }
 
 sub stderr_term {
 	my $s = shift();
-	my $ret = $s->{stderr_term};
-	defined($ret) ? $ret : ($s->{stderr_term} = (-t STDERR))
+	$s->{stderr_term} // ($s->{stderr_term} = (-t STDERR))
 }
 
 sub color_force {
@@ -95,7 +105,7 @@ sub color_stdout {
 	my $ret = $s->{color_stdout};
 	return $ret if(defined($ret));
 	my $force = $s->color_force();
-	$s->{stdout_term} = ((defined($force) ? $force : ($s->stdout_term()))
+	$s->{stdout_term} = (($force // $s->stdout_term())
 		? &use_ansicolor() : '')
 }
 
@@ -104,7 +114,7 @@ sub color_stderr {
 	my $ret = $s->{color_stderr};
 	return $ret if(defined($ret));
 	my $force = $s->color_force();
-	$s->{stderr_term} = ((defined($force) ? $force : ($s->stderr_term()))
+	$s->{stderr_term} = (($force // $s->stderr_term())
 		? &use_ansicolor() : '')
 }
 
@@ -147,6 +157,7 @@ sub warning {
 
 sub get_options {
 	my $s = shift();
+	my @passfile = ();
 	Getopt::Long::Configure(qw(bundling gnu_compat no_permute));
 	GetOptions(
 	'help|h', sub { pod2usage(1) },
@@ -154,6 +165,8 @@ sub get_options {
 	'version|V', sub { print($s->name(), " $VERSION\n"); exit(0) },
 	'tcp|t', sub { $s->tcp(1) },
 	'local|l', sub { $s->tcp('') },
+	'password|y=s', sub { $s->password($_[1]) },
+	'passfile|Y=s', \@passfile,
 	'color|F', sub { $s->color_force(1) },
 	'no-color|nocolor|p', sub { $s->color_force('') },
 	'port|P=i', sub { $s->tcp(1); $s->port($_[1]) },
@@ -161,12 +174,22 @@ sub get_options {
 	'file|f=s', sub { $s->tcp(''); $s->file($_[1]) },
 	'timeout|T=i', sub { $s->timeout($_[1]) },
 	@_) or pod2usage(2);
-	return unless(@ARGV);
-	if($ARGV[0] =~ m/^man/i) {
-		pod2usage(verbose => 2)
-	} elsif($ARGV[0] =~ m/^help/i) {
-		pod2usage(0)
+	if(@ARGV) {
+		if($ARGV[0] =~ m/^man/i) {
+			pod2usage(verbose => 2)
+		} elsif($ARGV[0] =~ m/^help/i) {
+			pod2usage(0)
+		}
 	}
+	# Read password file before dropping permissions
+	for my $passfile (@passfile) {
+		next unless(open(my $fh, '<', $passfile));
+		my $pw = <$fh>;
+		close($fh);
+		chomp($pw);
+		$s->password($pw) if(&is_nonempty($pw))
+	}
+	1
 }
 
 sub check_options {
@@ -176,7 +199,24 @@ sub check_options {
 		unless(&is_nonnegative($timeout));
 	my $port = $s->port();
 	$s->fatal("illegal port $port")
-		unless(&is_nonnegative($port) && ($port <= 0xFFFF))
+		unless(&is_nonnegative($port) && ($port <= 0xFFFF));
+	return unless(defined($s->password()));
+	eval {
+		require Crypt::Rijndael;
+		Crypt::Rijndael->import()
+	};
+	$s->fatal('you might need to install perl module Crypt::Rijndael', $@)
+		if($@);
+	eval {
+		require Digest::SHA;
+		Digest::SHA->import(qw(sha256));
+	};
+	$s->fatal('you might need to install perl module Digest::SHA', $@)
+		if($@);
+	my $hash = sha256($s->password());
+	my $p = Crypt::Rijndael->new($hash, Crypt::Rijndael::MODE_CFB());
+	$p->set_iv('a' x 16);
+	$s->password($p)
 }
 
 sub default_filename {
@@ -187,7 +227,7 @@ sub default_filename {
 	1
 }
 
-sub conn_recv {
+sub conn_recv_raw {
 	my $s = shift();
 	my $conn = shift();
 	my $timeout = $_[1];
@@ -206,9 +246,49 @@ sub conn_recv {
 	1
 }
 
-sub conn_send {
+sub conn_send_raw {
 	my ($s, $conn, $data) = @_;
 	defined($conn->send($data))
+}
+
+sub conn_send {
+	my $s = shift();
+	my $p = ($s->password());
+	defined($p) ? $s->conn_send_raw($_[0], &my_encrypt($p, $_[1])) :
+		$s->conn_send_raw(@_)
+}
+
+sub conn_recv {
+	my $s = shift();
+	my $p = ($s->password());
+	return $s->conn_recv_raw(@_) unless(defined($p));
+	my $len = $_[3];
+	$s->conn_recv_raw($_[0], $_[1], $_[2],
+		((&is_nonnegative($len) && $len) ? ($len + 64) : $len))
+		&& &my_decrypt($p, $_[1])
+}
+
+sub my_encrypt {
+	my $p = shift();
+	$p->encrypt(&padding($_[0]))
+}
+
+sub my_decrypt {
+	my $p = shift();
+	return '' if(length($_[0]) % 16);
+	$_[0] = $p->decrypt($_[0]);
+	&unpadding($_[0])
+}
+
+sub padding {
+	my ($str) = @_;
+	$str .= '17';
+	my $mod = (length($str) % 16);
+	$mod ? ($str . ("z" x (16 - $mod))) : $str
+}
+
+sub unpadding {
+	$_[0] =~ s{17z*$}{}
 }
 
 1;

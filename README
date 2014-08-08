@@ -1,7 +1,7 @@
 (C) Martin Väth <martin@mvath.de>
 This project is under a BSD type license.
 
-schedule - script to schedule jobs in a multiuser multitasking environment
+schedule - framework to schedule jobs in a multiuser multitasking environment
 
 What is this project and what it is good for?
 =============================================
@@ -108,8 +108,9 @@ will show you the jobs with their numbers.
 
 Instead of sequential executing, one can also start more jobs in
 parallel, wait for other jobs, build dependencies on the success of
-certain jobs etc. To stay with the above example, suppose that you have
-scheduled the jobs
+certain jobs etc. In fact, you can write a simple "driver" script
+(in any language which you like) to actually schedule the queue jobs.
+To stay with the above example, suppose that you have queued the jobs
 
 1. emerge -NDu @world
 2. kernel -f
@@ -157,8 +158,8 @@ For further details on the various commands and options, use
 	schedule man
 
 
-Security considerations: Global vs. Local Servers, SCHEDULE_{,SERVER}_OPTS
-==========================================================================
+Security considerations: Encryption and Global vs. Local Servers
+================================================================
 
 In the above example, we assumed that you are root and that you are the
 only user on the machine: In this case you can just run schedule-server
@@ -166,8 +167,8 @@ in an init-file. The server will use a TCP socket for communicating.
 (Normally on a local socket, but you can even list worldwide by
 using -h 0.0.0.0).
 
-However, you should be aware that everybody who can access the TCP socket
-can start/see/cancel/re-order all of your tasks!
+However, you should be aware that in this simple setting everybody who
+can access the TCP socket can start/see/cancel/re-order all of your tasks!
 
 This is intentional so that you can also queue tasks as different users.
 It is not really a security risk, since users can only start e.g. a
@@ -178,41 +179,39 @@ to do its job [except for accessing the TCP socket], and therefore it is
 highly recommended to start it with an unprivileged user like "nobody";
 if started as root, schedule-server will by default change to that user.)
 
-However, you should always be aware that a possible attacker might
-change the order of you tasks.  For instance, in the second example above
-the attacker might be able to shutdown the machine whenever he wants.
+Nevertheless, the above is not always desired.
+For instance, in the second example above the attacker might be able
+to shutdown the machine whenever he wants.
 (Even in the first example, an attacker might cancel your jobs, setting their
 exit status to 0, and thus might cause the shutdown to happen earlier,
 although in that case the attacker is not able to see the shutdown command
 since in the first example the shutdown command is not part of the queue.)
 
-You can avoid this problem by using a file socket instead of a TCP socket:
-To do this, you must start the server with the option -l, and also
-every schedule command must use the option -l.
-In this case, only users who can access this file are able to modify the tasks.
+There are two ways to solve this problem which can also be combined.
 
-The disadvantage of this is that you are now longer able to schedule tasks
+(1) Using only encrypted sockets.
+
+This is done by using the option --passfile FILE for schedule-server
+and whenever you invoke schedule (see the next section how to simplify this).
+Then the communication of schedule with schedule-server is only possible
+if the same password (the first line of FILE) is used for both programs.
+(We point out for later configuration that if FILE is not readable or the
+first line is empty then this option is ignored.)
+
+(2) Using a file socket instead of a TCP socket.
+
+This is done by using the option -l or by specifying the file with --file
+for schedule-server and whenever you invoke schedule (see the next section
+how to simplify this).
+In this case, only users who can access the file socket are able to
+communicate with schedule-server. This is even more secure than (1)
+and might even avoid some DOS attacks which might be still possible with (1).
+
+The disadvantage of (2) is that you are then no longer able to schedule tasks
 of all users or of different machines (unless you use other tools like
 a network filesystem which supports file sockets), and also in a chroot
 you have to make sure that you can access the socket file (for instance
 by using mount --bind into the chroot).
-
-As usual, you decide between security and convenience, that is,
-starting schedule-server -l (secure) against schedule-server.
-
-To simplify setting an option like "-l" globally for every call to schedule
-and schedule-server, schedule supports the variable SCHEDULE_OPTS: Just
-	export SCHEDULE_OPTS=-l
-and all of your future calls of schedule and schedule-server will use the
-local file. (You can manually override this predefined option by specifying
-the opposite option -t explicitly.)
-Note that the above specified option takes effect in all schedule commands
-as well as in schedule-server. If you want to specify additional options,
-you must correspondingly export SCHEDULE_SERVER_OPTS. (The latter
-overrides SCHEDULE_OPTS; to avoid this "override" you can use things like:
-	export SCHEDULE_SERVER_OPTS='$SCHEDULE_SERVER -f "/foo/socket name"'
-Note that the interpretation of $SCHEDULE_SERVER and the quotes " " will
-be done by schedule-server.)
 
 Of course, nothing prevents you from starting a global server and a local
 server simultaneously and to mix "global" commands with local (and possibly
@@ -220,9 +219,32 @@ security critical) tasks: You only have to be aware to use always the
 correct options (e.g. -l, -t, or specify the correct hosts/ports/filenames)
 for the corresponding schedule commands.
 
-Actually you can even have several TCP servers running (using different ports)
-and several "local" servers (using different socket files): Ports, hosts,
-filenames etc. can all be set by various options.
+
+Configuration: environment variables SCHEDULE_OPTS and SCHEDULE_SERVER_OPTS
+===========================================================================
+
+To simplify setting an option like "--passfile FILE" or "-l" globally for
+every call to schedule and schedule-server, schedule supports the environment
+variable SCHEDULE_OPTS: For instance, you can set
+	export SCHEDULE_OPTS="--passfile '/path/to/file'"
+and all of your future calls of schedule and schedule-server will use the
+coresponding option. Recall that it is safe to specify --passfile if
+/path/to/file does not exist - in this case, the option is ignored.
+Similarly, you can alternatively/additionally add the option -l to use
+a (local) TCP socket instead of a TCP port by default (to override this,
+you can specify the option -t later on).
+
+Note that SCHEDULE_OPTS can contain shell quotes: These are resolved by
+schedule and schedule-server programs. In addition, SCHEDULE_OPTS
+can also refer to environment variables which are then resolved.
+
+In some rare cases, you might want to specify different default options
+for schedule and schedule-server: In this case, you can use the
+environment variables SCHEDULE_OPTS and SCHEDULE_SERVER_OPTS; the latter
+overrides the former for schedule-server. To avoid this "override" and
+instead "add" your options you can use the mechanisms mentioned earlier,
+for instance
+	export SCHEDULE_SERVER_OPTS='$SCHEDULE_OPTS -f "/foo/socket name"'
 
 
 Requirements
@@ -231,17 +253,29 @@ Requirements
 You need a multitasking system with TCP Sockets and/or Unix Domain sockets
 (for usage with -t or -l, respectively). Any Linux flavour will do
 (as will many other operating systems) and any not too ancient version of perl:
-Any full installation of perl (>=5.6) contains the required libraries in
-its core.
+Any full installation of perl (>=5.6) contains most of the required libraries
+in its core (the list of libraries is found in the beginning of the files).
+
+Additionally, if you want to use encryption, the two perl libraries
+	Crypt::Rijndael
+	Digest::SHA
+are needed. The latter is contained in more recent installations of
+perl (>=5.9.3), but the former might have to be installed separately from CPAN.
+These libraries are not needed if the --password and --passfile options
+are not used (or if the password file does not exist).
 
 
 Installation
 ============
 
-If you are a gentoo user, you can just emerge schedule from the mv overlay.
+If you are a gentoo user, you can just emerge schedule from the mv overlay
+and possibly have to adapt /etc/conf.d/schedule and the systemd service file.
+By default, these contain the options --passfile /etc/schedule.password,
+so you should generate these files with a password (and set permissions to
+your needs) if you want to make use of them.
 
-Otherwise you have to copy bin/* into /usr/bin/
-or any other directory of your $PATH.
+If your distribution has no package for schedule,you have to copy
+bin/* into /usr/bin/ or any other directory of your $PATH.
 
 Moreover, you have to copy lib/ (or its content) into the same directory
 as the binaries or into the parent directory or into a directory shown by
@@ -254,9 +288,14 @@ it is recommended in this case to remove/comment out the lines between
 For zsh completion support also copy zsh/_schedule into a directory of
 your zsh's $fpath.
 
-For openrc-support copy openrc/init.d/schedule to /etc/init.d/schedule
-and activate it in the usual way.
+For openrc-support copy then content of openrc to /etc and activate
+the schedule file in the usual way.
 For systemd-support copy systemd/system/schedule.{service,socket} to your
 systemd system folder and activate the service or socket file in the usual way.
 If you copied the main script not to /usr/bin/schedule, you have to modify
 the schedule.service file for systemd correspondingly.
+
+If you use the default openrc/systemd files you should also generate
+/etc/schedule.password (and set corresponding permissions) if you want to
+use encryption. In this case, it is recommended, to export the variables
+from the files in the env.d directory

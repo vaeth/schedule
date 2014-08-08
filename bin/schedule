@@ -9,17 +9,19 @@ use IO::Select;
 use IO::Socket; # INET or UNIX, depending on user's choice
 #use Sys::Hostname;   # not mandatory but recommended
 #use Term::ANSIColor; # not mandatory but recommended: fallback to no color
+#use Crypt::Rijndael; # needed for password protection
+#use Digest::SHA;     # needed for password protection
 
 use lib '/usr/share/schedule';
 use FindBin;
-if(defined($FindBin::Bin) && ($FindBin::Bin ne '')) {
+if(($FindBin::Bin // '') ne '') {
 	use lib File::Spec->catdir($FindBin::Bin, File::Spec->updir(), 'lib');
 	use lib File::Spec->catdir($FindBin::Bin, 'lib');
 	use lib $FindBin::Bin
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule', '0.14');
+my $s = Schedule::Connect->new('schedule', '0.15');
 
 =head1 NAME
 
@@ -164,14 +166,24 @@ This option implies B<--tcp> (unless overridden later on).
 Bind to I<addr>. The default is 127.0.0.1 (localhost only).
 This option implies B<--tcp> (unless overridden later on).
 
-=item B<--port=>I<port> or B<-P> I<port>
+=item B<--passfile=>I<password-file> or B<-Y> I<password-file>
 
-Use port number I<port> for interprocess communication-
-The default port is B<8471>.
+Read the first line from I<password-file> (without the newline)
+and use it as a password to encrypt communication between B<schedule>
+and B<schedule-server>. Both programs must use the same password for a
+succesfull communication.
 
-=item B<--addr=>I<addr> or B<-A> I<addr>
+This option can be used accumulatively:
+The first existing I<password-file> with a nonempty first line is used.
+If no such file is found, this option is tacitly ignored.
+This is to make it safe to specify this option in B<SCHEDULE_OPTS>
+or B<SCHEDULE_OPTS> if no corresponding file exists.
 
-Bind/connect to I<addr>. The default is 127.0.0.1 (localhost only).
+=item B<--password=>I<password> or B<-y> I<password>
+
+This is like B<--passfile>, with the difference that you specify the
+password directly. This option is dangerous, because many systems allow
+other users to see the commandline/environment (hence the password is visible).
 
 =item B<--job=>I<jobnr> or B<-j> I<jobnr>
 
@@ -486,7 +498,7 @@ sub cmd_queue {
 	return '' unless($success);
 	if($runmode eq 'queue') {
 		&client_recv(my $stat, 0);
-		unless(defined($stat) && ($stat eq 'run')) {
+		unless(($stat // '') eq 'run') {
 			$exitstatus = (&is_nonnegative($stat) ? $stat : $cancel);
 			return 1
 		}
@@ -690,6 +702,8 @@ sub cmd_insert {
 # Functions
 #
 
+{ # A static variable:
+	my $checked = '';
 sub openclient {
 	$socket = ($s->tcp() ? new IO::Socket::INET(
 		PeerAddr => $s->addr(),
@@ -699,13 +713,28 @@ sub openclient {
 		Peer => $s->file(),
 		Type => SOCK_STREAM()
 	));
-	return 1 if(defined($socket));
-	my ($silence) = @_;
-	$s->error("unable to setup socket: $!",
-		'maybe you should run first: schedule-server &')
-			unless(defined($silence) && $silence);
-	''
-}
+	unless(defined($socket)) {
+		my $silence = (shift() // '');
+		$s->error("unable to setup socket: $!",
+			'maybe you should run first: schedule-server &')
+			unless($silence);
+		return ''
+	}
+	return 1 if($checked);
+	my $ver;
+	if(&client_send('version') && &client_recv($ver) &&
+		&is_nonempty($ver)) {
+		unless($ver eq $s->version()) {
+			$s->error('schedule-server ' . $ver .
+				' does not match schedule ' . $s->version());
+			return ''
+		}
+	} else {
+		$s->error('cannot connect to socket');
+		return ''
+	}
+	$checked = 1
+}}
 
 sub client_recv {
 	return 1 if($s->conn_recv($socket, @_));
@@ -722,9 +751,8 @@ sub closeclient {
 	my $ret = ($socket->close());
 	$socket = undef;
 	return 1 if($ret);
-	my ($silence) = @_;
-	$s->error("failed to close socket: $!")
-		unless(defined($silence) && $silence);
+	my $silence = (shift() // '');
+	$s->error("failed to close socket: $!") unless($silence);
 	''
 }
 
@@ -886,9 +914,8 @@ sub my_hosttext {
 	unless(defined($hosttext)) {
 		my $olderr = undef;
 		$olderr = undef unless(open($olderr, '>&', \*STDERR) && open(STDERR, '>', $devnull));
-		$hosttext = `uname -m`;
+		$hosttext = (`uname -m` // '');
 		open(STDERR, '>&', $olderr) if(defined($olderr));
-		$hosttext = '' unless(defined($hosttext));
 		chomp($hosttext)
 	}
 	$hosttext =~ s{[\(\)\[\]]}{.}g;
@@ -898,8 +925,7 @@ sub my_hosttext {
 { my $cwd = undef; # a static closure
 sub my_cwd {
 	return $cwd if(defined($cwd));
-	$cwd = getcwd();
-	$cwd = '' unless(defined($cwd));
+	$cwd = (getcwd() // '');
 	unless($keepdir) {
 		my $home = $ENV{'HOME'};
 		if(&is_nonempty($home)) {
@@ -950,8 +976,7 @@ $s->fatal("illegal --exit $cancel")
 
 # Process command:
 
-my $action = shift(@ARGV);
-$action = '' unless(defined($action));
+my $action = shift(@ARGV) // '';
 my $ret;
 if($action =~ m{^sto}i) {
 	$ret = &cmd_stop_server()

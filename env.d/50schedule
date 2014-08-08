@@ -1,0 +1,1 @@
+SCHEDULE_OPTS="-Y /etc/schedule.password"

@@ -4,13 +4,15 @@
 description='server to schedule and execute queued jobs'
 
 start() {
-	ebegin 'starting schedule-server'
-	start-stop-daemon -S -b -N 9 -u nobody -g nobody -- schedule-server -k
+	ebegin 'Starting schedule-server'
+	eval start-stop-daemon -S -b -N 9 -u root -g nobody \
+		-- schedule-server ${schedule_opts}
 	eend ${?}
 }
 
 stop() {
-	ebegin 'stopping schedule-server'
-	schedule stop-server || start-stop-daemon -K schedule-server
+	ebegin 'Stopping schedule-server'
+	eval schedule ${schedule_opts} stop-server \
+		|| start-stop-daemon -K schedule-server
 	eend ${?}
 }

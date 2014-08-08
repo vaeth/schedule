@@ -23,7 +23,7 @@ our @EXPORT_OK = qw(
 	split_quoted
 	env_to_array
 );
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 
 sub signals {
 	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = ((@_) ? $_[0] : sub {1})
@@ -59,7 +59,7 @@ sub is_nonnegative {
 
 sub is_nonempty {
 	my ($i) = @_;
-	(defined($i) && ($i ne ''))
+	(($i // '') ne '')
 }
 
 # Split shell-quoted string into words, substituting environment variables

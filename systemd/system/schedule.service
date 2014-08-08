@@ -2,12 +2,12 @@
 Description=Server to schedule and execute queued jobs
 
 [Service]
-User=nobody
+User=root
 Group=nobody
 SupplementaryGroups=
 Nice=19
-ExecStart=/usr/bin/schedule-server -k
-ExecStop=/usr/bin/schedule stop-server
+ExecStart=/usr/bin/schedule-server -Y /etc/schedule.password
+ExecStop=/usr/bin/schedule -Y /etc/schedule.password stop-server
 
 [Install]
 WantedBy=multi-user.target
