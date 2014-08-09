@@ -19,7 +19,7 @@ use Schedule::Helpers qw(/./);
 
 use Exporter qw(import);
 
-our $VERSION = '0.15';
+our $VERSION = '1.0';
 
 sub new {
 	my ($class, $name, $ver) = @_;
@@ -281,13 +281,13 @@ sub my_decrypt {
 }
 
 sub padding {
-	my ($str) = @_;
-	$str .= '17';
-	my $mod = (length($str) % 16);
+	my $str = sha256(rand() . rand() . rand() . rand()) . shift() . '17';
+	my $mod = (length($str) & 0x0F);
 	$mod ? ($str . ("z" x (16 - $mod))) : $str
 }
 
 sub unpadding {
+	$_[0] = substr($_[0], 32);
 	$_[0] =~ s{17z*$}{}
 }
 

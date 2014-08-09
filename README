@@ -254,7 +254,8 @@ You need a multitasking system with TCP Sockets and/or Unix Domain sockets
 (for usage with -t or -l, respectively). Any Linux flavour will do
 (as will many other operating systems) and any not too ancient version of perl:
 Any full installation of perl (>=5.6) contains most of the required libraries
-in its core (the list of libraries is found in the beginning of the files).
+in its core; the list of required perl libraries is found in the beginning
+of the bin/* files.
 
 Additionally, if you want to use encryption, the two perl libraries
 	Crypt::Rijndael

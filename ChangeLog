@@ -1,5 +1,10 @@
 # ChangeLog for schedule
 
+*schedule-1.0:
+	Martin Väth <martin at mvath.de>:
+	- Strengthen encryption by using random first blocks; this should
+	  greatly reduce known plaintext attacks by MITM
+
 *schedule-0.15:
 	Martin Väth <martin at mvath.de>:
 	- Introduce encryption: --password --passfile
