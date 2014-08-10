@@ -11,6 +11,7 @@ use IO::Socket; # INET or UNIX, depending on user's choice
 #use Term::ANSIColor; # not mandatory but recommended: fallback to no color
 #use Crypt::Rijndael; # needed for password protection
 #use Digest::SHA;     # needed for password protection
+#use POSIX;           # needed for --detach
 
 use lib '/usr/share/schedule';
 use FindBin;
@@ -21,7 +22,7 @@ if(($FindBin::Bin // '') ne '') {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule-server', '1.0');
+my $s = Schedule::Connect->new('schedule-server', '1.1');
 
 =head1 NAME
 
@@ -46,9 +47,13 @@ This is a daemon which needs to run if the B<schedule> command shall be used.
 It can be started as a user or as root - it only needs permissions to setup a
 TCP port or a unix domain socket, depending on the communication type
 you choose. Only in special occassions it emits diagnostic messages on STDERR.
-Note that this daemon does not background itself and does not generate a
-PID file: Use a command line like "schedule-server &" or a script like
-start-stop-daemon if you want that.
+
+Note that although this daemon has the ability to background itself,
+it is not recommended to use this possibility for the system's main server.
+For instance, this daemon does not generate a PID file by itself.
+Use a controlling program start-stop-daemon or a daemon-managing framework
+like systemd, if available.
+
 It should be completely safe to run this daemon as root, but to limit the
 effect of unforeseen bugs, for security reasons, if the effective user id is 0,
 this daemon tries to change its permissions to user and group "nobody".
@@ -58,14 +63,18 @@ By default, the daemon uses a TCP socket on a local port for communication.
 Note that this means that every user on the local machine can communicate
 with the server and list/start/remove/change the order of queued commands
 of all users using the same daemon. This is intentional, and you should be
-aware of the security risks if you use this daemon globally.
+aware of the security risks and make use of the encryption features
+if you use this daemon globally.
 
 If you do not want this, you can run this daemon locally, communicating by a
 file (unix domain socket). In this case, you will usually run the daemon
-locally as a user and specify the option B<--local>
-(and/or B<--file>, B<--umask>).
-It is recommended in this case, to setup an alias or a shell script
-to call B<schedule> always with the same B<--local> or B<--file> option, too.
+locally as a user and specify the option B<--local> (and/or B<--file>).
+
+If you make use of the encryption feature or of the B<--local> option,
+it is recommended, to setup an alias or a shell script to call
+B<schedule> always with the same B<--local> or B<--file> option, too.
+You can use the variables B<SCHEDULE_OPTS> and/or B<SCHEDULE_SERVER_OPTS>
+for this purpose.
 
 =head1 OPTIONS
 
@@ -121,6 +130,11 @@ the security implications: Everybody will be able to start/see/re-order/cancel
 your tasks unless you use encryption with B<--passfile>.
 This option implies B<--tcp> (unless overridden later on).
 
+=item B<--timeout=>I<seconds> or B<-T I<seconds>
+
+Time to wait in case of communication problems; the default is 10 B<seconds>.
+The value B<0> means to skip the timeout.
+
 =item B<--passfile=>I<password-file> or B<-Y> I<password-file>
 
 Read the first line from I<password-file> (without the newline)
@@ -142,6 +156,22 @@ or B<SCHEDULE_OPTS> if no corresponding file exists.
 This is like B<--passfile>, with the difference that you specify the
 password directly. This option is dangerous, because many systems allow
 other users to see the commandline/environment (hence the password is visible).
+
+=item B<--background> or B<--bg> or B<-b>
+
+Fork into background mode. This option is not recommended for system servers:
+Use facilities of your init-system instead.
+
+=item B<--detach> or B<--daemon> or B<-B>
+
+This is like B<--background>, but it also detaches from terminal and discards
+all subsequent standard input/output/error.
+To avoid unexpected issues with relatice paths, the current working directory
+is kept (and thus remains occupied). Therefore you might want to change to the
+root directory before using this option.
+
+This option is not recommended for system servers:
+Use facilities of your init-system instead.
 
 =item B<--keep-permissions> or B<-k>
 
@@ -304,12 +334,11 @@ sub serverloop {
 				$send = ''
 			}
 			$data =~ s{^([+-]?\d*)\n}{};
-			my $index = &my_index($2, 1);
+			my $index = &my_index($1, 1);
 			my $stat = (($cmd eq 'start') ? '' : undef);
 			++$unique;
-			$s->conn_send($conn, $send . $serverid . $unique);
-			$s->conn_recv($conn, $data, undef, $data);
 			splice(@$joblist, $index, 0, [$conn, $data, $stat, $unique, []]);
+			$s->conn_send($conn, $send . $serverid . $unique);
 			$will_close = '' unless(defined($stat))
 		} elsif(($cmd eq 'run') || ($cmd eq 'bg') || ($cmd eq 'wait')) {
 			my $i = &my_index($data);
@@ -364,21 +393,14 @@ sub serverloop {
 			while() {
 				my $i = &my_index($data);
 				my $reply = &indexname($i);
-				my $reply2 = undef;
 				if($reply ne '0') {
 					my $job = $joblist->[$i];
 					my $stat = (&get_status($job) // '-');
 					$reply .= "\n$stat";
-					if($cmd eq 'list') {
-						$reply2 = &get_cmd($job);
-						$reply .= "\n" . length($reply2)
-					}
+					$reply .= "\n" . &get_cmd($job)
+						if($cmd eq 'list')
 				}
 				last unless($s->conn_send($conn, $reply));
-				if(defined($reply2)) {
-					last unless($s->conn_recv($conn, my $dummy));
-					last unless($s->conn_send($conn, $reply2))
-				}
 				last unless($s->conn_recv($conn, $data));
 				last unless($data =~ s{^(list|status)\n?}{});
 				$cmd = $1
@@ -684,6 +706,7 @@ pod2usage(2) if(@ARGV);
 # Call main functions:
 
 &prepare_file() unless($s->tcp());
+$s->forking();
 my $exitstatus = ((&openserver() && &serverloop()) ? 0 : 1);
 $exitstatus = 1 unless(&closeserver());
 exit($exitstatus);

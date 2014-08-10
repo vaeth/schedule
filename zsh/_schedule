@@ -17,6 +17,8 @@ service_opts=(
 '(--tcp -t '{'--local)-l','-l)--local'}'[use unix domain socket (file)]'
 '(--no-color -nocolor -p '{'-F)--color','(--color)-F'}'[force color on non-terminal]'
 '(--color -F '{'--no-color --nocolor)-p','--nocolor -p)--no-color','--no-color -E)--nocolor'}'[non-colored output]'
+{'(--bg --background)-b','(--background -b)--bg','(--bg -b)--background'}'[run main task in background]'
+{'(--daemon --detach)-B','(--detach -B)--daemon','(--daemon -B)--detach'}'[run main task detached in background]'
 )
 case ${service} in
 (*server)

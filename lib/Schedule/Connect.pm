@@ -4,9 +4,11 @@
 # This is part of the schedule project and under a BSD type license.
 
 package Schedule::Connect;
+use File::Spec;
 #use Term::ANSIColor; # not mandatory but recommended: fallback to no color
 #use Crypt::Rijndael; # needed for password protection
 #use Digest::SHA;     # needed for password protection
+#use POSIX;           # needed for --detach
 
 use strict;
 use warnings;
@@ -19,13 +21,14 @@ use Schedule::Helpers qw(/./);
 
 use Exporter qw(import);
 
-our $VERSION = '1.0';
+our $VERSION = '1.1';
 
 sub new {
 	my ($class, $name, $ver) = @_;
 	$0 = $name;
 	my $s = bless {
 		name => $name,
+		daemon => undef,
 		tcp => 1,
 		addr => '127.0.0.1',
 		timeout => 10,
@@ -55,34 +58,39 @@ sub name {
 	$s->{name}
 }
 
+sub daemon {
+	my $s = shift();
+	@_ ? ($s->{daemon} = shift()) : $s->{daemon}
+}
+
 sub tcp {
 	my $s = shift();
-	@_ ? $s->{tcp} = shift() : $s->{tcp}
+	@_ ? ($s->{tcp} = shift()) : $s->{tcp}
 }
 
 sub addr {
 	my $s = shift();
-	@_ ? $s->{addr} = shift() : $s->{addr}
+	@_ ? ($s->{addr} = shift()) : $s->{addr}
 }
 
 sub timeout {
 	my $s = shift();
-	@_ ? $s->{timeout} = shift() : $s->{timeout}
+	@_ ? ($s->{timeout} = shift()) : $s->{timeout}
 }
 
 sub port {
 	my $s = shift();
-	@_ ? $s->{port} = shift() : $s->{port}
+	@_ ? ($s->{port} = shift()) : $s->{port}
 }
 
 sub password {
 	my $s = shift();
-	@_ ? $s->{password} = shift() : $s->{password}
+	@_ ? ($s->{password} = shift()) : $s->{password}
 }
 
 sub file {
 	my $s = shift();
-	@_ ? $s->{file} = shift() : $s->{file}
+	@_ ? ($s->{file} = shift()) : $s->{file}
 }
 
 sub stdout_term {
@@ -97,7 +105,7 @@ sub stderr_term {
 
 sub color_force {
 	my $s = shift();
-	@_ ? $s->{color_force} = shift() : $s->{color_force}
+	@_ ? ($s->{color_force} = shift()) : $s->{color_force}
 }
 
 sub color_stdout {
@@ -160,9 +168,6 @@ sub get_options {
 	my @passfile = ();
 	Getopt::Long::Configure(qw(bundling gnu_compat no_permute));
 	GetOptions(
-	'help|h', sub { pod2usage(1) },
-	'man|?', sub { pod2usage(-verbose => 2) },
-	'version|V', sub { print($s->name(), " $VERSION\n"); exit(0) },
 	'tcp|t', sub { $s->tcp(1) },
 	'local|l', sub { $s->tcp('') },
 	'password|y=s', sub { $s->password($_[1]) },
@@ -173,6 +178,11 @@ sub get_options {
 	'addr|A=s', sub { $s->tcp(1); $s->addr($_[1]) },
 	'file|f=s', sub { $s->tcp(''); $s->file($_[1]) },
 	'timeout|T=i', sub { $s->timeout($_[1]) },
+	'background|bg|b', sub { $s->daemon('') },
+	'detach|daemon|B', sub { $s->daemon(1) },
+	'help|h', sub { pod2usage(1) },
+	'man|?', sub { pod2usage(-verbose => 2) },
+	'version|V', sub { print($s->name(), " $VERSION\n"); exit(0) },
 	@_) or pod2usage(2);
 	if(@ARGV) {
 		if($ARGV[0] =~ m/^man/i) {
@@ -200,6 +210,14 @@ sub check_options {
 	my $port = $s->port();
 	$s->fatal("illegal port $port")
 		unless(&is_nonnegative($port) && ($port <= 0xFFFF));
+	if($s->daemon() // '') {
+		eval {
+			require POSIX;
+			POSIX->import()
+		};
+		$s->fatal('you might need to install perl module POSIX', $@)
+			if($@)
+	}
 	return unless(defined($s->password()));
 	eval {
 		require Crypt::Rijndael;
@@ -219,6 +237,27 @@ sub check_options {
 	$s->password($p)
 }
 
+sub forking {
+	my $s = shift();
+	return 1 unless(defined(my $d = $s->daemon()));
+	my $pid = fork();
+	$s->fatal('forking failed; running in foreground')
+		unless(defined($pid));
+	exit(0) if($pid);
+	return 1 unless($d);
+	if(POSIX::setsid() < 0) {
+		$s->warning('cannot detach from controlling terminal');
+		return ''
+	}
+	my $ret = close(STDIN);
+	$ret = '' unless(close(STDOUT));
+	$ret = '' unless(close(STDERR));
+	my $devnull = File::Spec->devnull();
+	$ret = '' unless(open(STDIN, '<', $devnull));
+	$ret = '' unless(open(STDOUT, '+>', $devnull));
+	open(STDERR, '+>', $devnull) && $ret
+}
+
 sub default_filename {
 	my $s = shift();
 	return '' if(defined($s->file()));
@@ -227,45 +266,57 @@ sub default_filename {
 	1
 }
 
+sub conn_send_raw {
+	my ($s, $conn, $data) = @_;
+	defined($conn->send($data))
+}
+
 sub conn_recv_raw {
 	my $s = shift();
 	my $conn = shift();
-	my $timeout = $_[1];
-	my $len = $_[2];
-	$timeout = $s->timeout() unless(&is_nonempty($timeout));
-	if(&is_nonnegative($timeout) && $timeout &&
-		!IO::Select->new($conn)->can_read($timeout)) {
+	my $len = $_[1];
+	my $timeout = $_[2];
+	if($timeout && !IO::Select->new($conn)->can_read($timeout)) {
 		$s->error('timeout when reading socket');
 		return ''
 	}
-	unless(defined($conn->recv($_[0],
-		(&is_nonnegative($len) && length($len) < 9) ? $len : 0x2000))) {
+	unless(defined($conn->recv($_[0], $len))) {
 		$s->error('cannot receive from socket: ' . $!);
 		return ''
 	}
 	1
 }
 
-sub conn_send_raw {
+sub conn_send_smart {
 	my ($s, $conn, $data) = @_;
-	defined($conn->send($data))
+	my $len = length($data);
+	my $timeout = ($_[1] // $s->timeout());
+	$s->conn_send_raw($conn, $len . (' ' x (32 - length($len))) . $data)
+}
+
+sub conn_recv_smart {
+	my $s = shift();
+	my $conn = shift();
+	my $timeout = $_[1];
+	my $len;
+	$s->conn_recv_raw($conn, $len, 32, ($timeout // $s->timeout())) &&
+		$len =~ m{^(\d+) +$} &&
+		$s->conn_recv_raw($conn, $_[0], $1,
+			($timeout // 1) || $s->timeout())
 }
 
 sub conn_send {
 	my $s = shift();
 	my $p = ($s->password());
-	defined($p) ? $s->conn_send_raw($_[0], &my_encrypt($p, $_[1])) :
-		$s->conn_send_raw(@_)
+	$s->conn_send_smart($_[0],
+		(defined($p) ? &my_encrypt($p, $_[1]) : $_[1]))
 }
 
 sub conn_recv {
 	my $s = shift();
+	return '' unless($s->conn_recv_smart(@_));
 	my $p = ($s->password());
-	return $s->conn_recv_raw(@_) unless(defined($p));
-	my $len = $_[3];
-	$s->conn_recv_raw($_[0], $_[1], $_[2],
-		((&is_nonnegative($len) && $len) ? ($len + 64) : $len))
-		&& &my_decrypt($p, $_[1])
+	(!defined($p)) || &my_decrypt($p, $_[1])
 }
 
 sub my_encrypt {
@@ -277,7 +328,7 @@ sub my_decrypt {
 	my $p = shift();
 	return '' if(length($_[0]) % 16);
 	$_[0] = $p->decrypt($_[0]);
-	&unpadding($_[0])
+	&unpadding($_[0]) || ($_[0] = '')
 }
 
 sub padding {
@@ -287,6 +338,7 @@ sub padding {
 }
 
 sub unpadding {
+	return '' if(length($_[0]) <= 32);
 	$_[0] = substr($_[0], 32);
 	$_[0] =~ s{17z*$}{}
 }

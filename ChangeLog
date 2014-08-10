@@ -1,5 +1,14 @@
 # ChangeLog for schedule
 
+*schedule-1.1:
+	Martin Väth <martin at mvath.de>:
+	- Introduce --bg, --daemon
+	- Make the communication protocol safe concerning message length
+	- Due to the previous change, strange communication bugs for some
+	  commands are now fixed. For instance, when using encryption,
+	  "schedule exec" was failing when looping over more than one process
+	- Do not set executable bit on libraries
+
 *schedule-1.0:
 	Martin Väth <martin at mvath.de>:
 	- Strengthen encryption by using random first blocks; this should

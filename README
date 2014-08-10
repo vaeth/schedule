@@ -47,7 +47,7 @@ you use this project.
 
 0. unless you started schedule-server in an init file or use a
    schedule-server of a different machine, you run
-	schedule-server &
+	schedule-server --daemon
 
 1. You run
 	schedule sq emerge -NDu @world
@@ -63,6 +63,13 @@ you use this project.
    If you enter it while the above command is still running,
    "kernel -f" is not started immediately, but it will be "queued"
    for scheduling in step 5.
+   If you do not want to use a differnt shell for the next step,
+   you use instead
+	schedule --bg sq kernel -f
+   which is similar to
+	schedule sq kernel -f &
+   but in contrast to the latter will not cause a race condition if
+   several such commands are used subsequently in a script.
 
 3. In another shell run
 	schedule sq emerge -1O @module-rebuild

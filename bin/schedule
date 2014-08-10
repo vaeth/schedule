@@ -11,6 +11,7 @@ use IO::Socket; # INET or UNIX, depending on user's choice
 #use Term::ANSIColor; # not mandatory but recommended: fallback to no color
 #use Crypt::Rijndael; # needed for password protection
 #use Digest::SHA;     # needed for password protection
+#use POSIX;           # needed for --detach
 
 use lib '/usr/share/schedule';
 use FindBin;
@@ -21,7 +22,7 @@ if(($FindBin::Bin // '') ne '') {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule', '1.0');
+my $s = Schedule::Connect->new('schedule', '1.1');
 
 =head1 NAME
 
@@ -161,10 +162,16 @@ This option implies B<--local> (unless overridden later on).
 Use port number I<port>; default is B<8471>.
 This option implies B<--tcp> (unless overridden later on).
 
+
 =item B<--addr=>I<addr> or B<-A> I<addr>
 
 Bind to I<addr>. The default is 127.0.0.1 (localhost only).
 This option implies B<--tcp> (unless overridden later on).
+
+=item B<--timeout=>I<seconds> or B<-T I<seconds>
+
+Time to wait in case of communication problems; the default is 10 B<seconds>.
+The value B<0> means to skip the timeout.
 
 =item B<--passfile=>I<password-file> or B<-Y> I<password-file>
 
@@ -203,6 +210,33 @@ This option can be used repeatedly; all arguments are collected.
 I<jobs> can be as in the normal argument list (space-separated).
 If used with B<start-or-queue>, B<ok>, B<finished>, B<started>,
 check whether the listed jobs have been finished with zero exit status.
+
+=item B<--background> or B<--bg> or B<-b>
+
+For commands which are expected to be waiting (B<queue>, B<start-or-queue>
+if the condition for immediate start are not satisfied, B<exec>, B<queue>,
+B<parallel>, B<wait>) fork into background and return before the actual
+waiting begins.
+
+This is similar to using the B<&> in a shell, but in contrast to the latter,
+a sequence of such commands does not give a race condition.
+For instance, if you use B<schedule queue command1 & schedule queue command2 &>
+it is partially random whether B<command1> is indeed queued in fron of
+B<command1>.
+By using instead B<schedule --bg command1 && schedule --bg command2>
+this cannot happen.
+
+Although possible, it is not recommended to use B<schedule --bg parallel>.
+Indeed, B<schedule bg> has practically the same effect but (despite its name)
+does not fork into the background.
+
+=item B<--detach> or B<--daemon> or B<-B>
+
+This is like B<--background>, but it also detaches from terminal and discards
+all subsequent standard input/output/error.
+To avoid unexpected issues with relatice paths, the current working directory
+is kept (and thus remains occupied). Therefore you might want to change to the
+root directory before using this option.
 
 =item B<--finished=>I<jobs> or B<-x> I<jobs>
 
@@ -315,20 +349,18 @@ to the command while it is running.
 
 =item B<exec> I<jobs>
 
-This is like B<schdeule run> but breaks further execution on the first job
-with nonzero exit status. Note that also finished jobs can have nonzero
-exit status.
+This is like B<schdeule run> but breaks further execution if a job exits
+with nonzero status. Note that also finished jobs can have nonzero exit status.
 
 Similarly to B<run>, this command is not race-free.
 
 =item B<bg> I<jobs>
 
-This is like B<schedule run> but starts all non-started jobs in parallel
-and then returns.
+This is like B<schedule run> but starts all non-started B<jobs> in parallel
+without ever waiting (and then returns).
+In contrast to the B<--bg> option, no process is forked.
 
-Similarly to B<run>, this command is not race-free (although a race can
-only happen if you simultaneously try to run other commands with B<schedule>
-for which there usually is no reason, usually)
+Similarly to B<run>, this command is not race-free.
 
 =item B<wait> I<jobs>
 
@@ -336,8 +368,6 @@ This waits until all specified jobs have been finished and
 returns the largest exit status.
 
 Similarly to B<run>, this command is not race-free,
-This is intentional so that modification of the job queue has effect
-to the command while it is running.
 
 =item B<parallel> I<jobs>
 
@@ -486,7 +516,7 @@ sub cmd_queue {
 	my $cmd = '[' .  &my_user() . '@' . &my_hostname() .
 		'(' . &my_hosttext() . ')' .
 		&my_cwd() . ']' . &join_quoted(@ARGV);
-	my $success = &client_send("$runmode\n$destjob\n" . length($cmd));
+	my $success = &client_send("$runmode\n$destjob\n" . $cmd);
 	$success = '' unless(&client_recv($unique));
 	if($have) {
 		$unique =~ m{^([^\n]*)\n(.*)};
@@ -494,9 +524,9 @@ sub cmd_queue {
 		$unique = $2
 	}
 	&signals(\&cancel_job);
-	$success = '' unless(&client_send($cmd));
 	return '' unless($success);
 	if($runmode eq 'queue') {
+		$s->forking();
 		&client_recv(my $stat, 0);
 		unless(($stat // '') eq 'run') {
 			$exitstatus = (&is_nonnegative($stat) ? $stat : $cancel);
@@ -590,10 +620,6 @@ sub cmd_list {
 					. $stat . $reset if($use_color)
 			} else {
 				return ''
-			}
-			unless($quiet) {
-				return '' unless(&client_send("\n") &&
-					&client_recv($reply, undef, $reply))
 			}
 			next unless($quiet < 2);
 			if($quiet) {
@@ -716,7 +742,7 @@ sub openclient {
 	unless(defined($socket)) {
 		my $silence = (shift() // '');
 		$s->error("unable to setup socket: $!",
-			'maybe you should run first: schedule-server &')
+			'maybe you should run first: schedule-server --daemon')
 			unless($silence);
 		return ''
 	}
@@ -759,6 +785,7 @@ sub closeclient {
 sub runner {
 	my ($runmode) = @_;
 	my $send = (($runmode eq 'exec') ? 'run' : $runmode) . "\n";
+	$s->forking() if($runmode ne 'bg');
 	for my $a (@ARGV) {
 		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
 			return '' unless(&openclient());
@@ -779,7 +806,7 @@ sub runner {
 					unless(&is_nonnegative($status));
 				if($status) {
 					&set_exitstatus($status);
-					return 1 if($runmode eq 'exec');
+					return 1 if($runmode eq 'exec')
 				}
 			}
 			return '' unless(&closeclient())
