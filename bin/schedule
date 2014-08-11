@@ -22,7 +22,7 @@ if(($FindBin::Bin // '') ne '') {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule', '1.1');
+my $s = Schedule::Connect->new('schedule', '2.0');
 
 =head1 NAME
 
@@ -51,9 +51,14 @@ B<s> (despite being non-unique) can be used instead of B<start>.
 Moreover, B<start-or-queue> can be abbreviated as anything containing B<s>
 and B<q>.
 
-I<jobs> is either a job numbers or a string of the form I<from>B<:>I<to>
-where I<from> and B<to> may be omitted (and then mean 1 or infinity,
-respectively). If no I<jobs> argument is given, it defaults to B<:>.
+I<jobs> is either a job number or job range, that is, a string of the form
+I<from>B<:>I<to> where I<from> and B<to> may be omitted (and then mean 1
+or infinity, respectively). If no I<jobs> argument is given, it defaults
+to B<:>. Job numbers (also in job ranges) can be negative or 0: In this case,
+the counting is from the end of the queue.
+
+For the commands B<run>, B<exec>, and B<wait>, the job number or job range
+can start with a leading B</> which indicates that the range is static.
 
 Exit status is usually the largest exit status of the scheduled command.
 In case of a fatal communication error (e.g. server not started) the
@@ -168,7 +173,7 @@ This option implies B<--tcp> (unless overridden later on).
 Bind to I<addr>. The default is 127.0.0.1 (localhost only).
 This option implies B<--tcp> (unless overridden later on).
 
-=item B<--timeout=>I<seconds> or B<-T I<seconds>
+=item B<--timeout=>I<seconds> or B<-T> I<seconds>
 
 Time to wait in case of communication problems; the default is 10 B<seconds>.
 The value B<0> means to skip the timeout.
@@ -214,9 +219,9 @@ check whether the listed jobs have been finished with zero exit status.
 =item B<--background> or B<--bg> or B<-b>
 
 For commands which are expected to be waiting (B<queue>, B<start-or-queue>
-if the condition for immediate start are not satisfied, B<exec>, B<queue>,
-B<parallel>, B<wait>) fork into background and return before the actual
-waiting begins.
+if the condition for immediate start are not satisfied, B<exec>, B<run>)
+fork into background and return before the actual waiting begins.
+To use this option, your system must know fork(), of course.
 
 This is similar to using the B<&> in a shell, but in contrast to the latter,
 a sequence of such commands does not give a race condition.
@@ -226,14 +231,18 @@ B<command1>.
 By using instead B<schedule --bg command1 && schedule --bg command2>
 this cannot happen.
 
-Although possible, it is not recommended to use B<schedule --bg parallel>.
-Indeed, B<schedule bg> has practically the same effect but (despite its name)
-does not fork into the background.
+This option is ignored for B<schedule --bg parallel>, since
+B<schedule bg> has a similar effect but does not need to fork.
 
-=item B<--detach> or B<--daemon> or B<-B>
+=item B<--daemon> or B<-B>
 
-This is like B<--background>, but it also detaches from terminal and discards
-all subsequent standard input/output/error.
+This is like B<--background>, but it also partially detaches from terminal
+and discards all subsequent standard input/output.
+
+=item B<--detach> or B<-E>
+
+This is like B<--daemon>, but fully detaches from terminal, discarding also
+error output. To use this option, your perl must have a functioning POSIX.
 To avoid unexpected issues with relatice paths, the current working directory
 is kept (and thus remains occupied). Therefore you might want to change to the
 root directory before using this option.
@@ -347,32 +356,59 @@ type B<:> or I<start>B<:> the end being changed dynamically).
 This is intentional so that modification of the job queue has effect
 to the command while it is running.
 
+However, this is not always desired. It is also possible to specify
+"static jobs" and "static job ranges" which means that these numbers/ranges
+refer to the queue in the moment when the command is executed and are not
+changed even if the job queue is modified later on. (There is one exception:
+If a job is removed from the queue, it is ignored as a static job,
+and its exit status is assumed to be 0.)
+To specify a "static job" or "static job range", just type B</> in front of
+the job number or job range. Thus, for instance, the commands
+
+B<schedule run /5:7 /0 /: :>
+
+will run the jobs 5, 6, 7, and the last from the current queue, followed
+by all of the rest of the current queue, followed by all commands which are
+possibly added to the queue until this happens.
+
 =item B<exec> I<jobs>
 
 This is like B<schdeule run> but breaks further execution if a job exits
 with nonzero status. Note that also finished jobs can have nonzero exit status.
 
-Similarly to B<run>, this command is not race-free.
-
-=item B<bg> I<jobs>
-
-This is like B<schedule run> but starts all non-started B<jobs> in parallel
-without ever waiting (and then returns).
-In contrast to the B<--bg> option, no process is forked.
-
-Similarly to B<run>, this command is not race-free.
+Similarly to B<run>, this command is not race-free, but static jobs and
+static job ranges are supported.
 
 =item B<wait> I<jobs>
 
 This waits until all specified jobs have been finished and
 returns the largest exit status.
 
-Similarly to B<run>, this command is not race-free,
+Similarly to B<run>, this command is not race-free, but static jobs and
+static job ranges are supported.
+
+=item B<bg> I<jobs>
+
+This is similar to B<schedule run> but starts all non-started B<jobs> in
+parallel without ever waiting (and then returns).
+In contrast to the B<--bg> option, no process is forked.
+In contrast to B<schedule run>, this command is not subject to a race
+condition.
 
 =item B<parallel> I<jobs>
 
-This is like first running B<schedule bg> and then B<schedule wait>
-(including the race between both commands).
+This is similar to running B<schedule bg> followed by B<schedule wait>
+where all arguments are interpreted as B<static> jobs/job ranges.
+However, this would have a race (if the queue is modified between the two
+commands) which is avoided with B<schedule parallel>.
+
+In other words, B<parallel> starts the specified jobs in background and
+waits for them to finish, even if the queue is extended or ordered differently
+during the execution of these jobs.
+
+Similarly to B<run> with static jobs there is one exception of this rule:
+If commands are removed from the queue while the commands are running,
+they are considered to be finished, and their exit status is assumed to be 0.
 
 =item B<list> I<jobs>
 
@@ -442,7 +478,6 @@ Martin VE<auml>th E<lt>martin@mvath.deE<gt>
 
 # Default for the Options:
 
-my $quiet = 0;
 my $cancel = 0;
 my $nouser = '';
 my $nohost = '';
@@ -479,7 +514,7 @@ my $col_dir = undef;
 sub cmd_stop_server {
 	return '' unless(&openclient() && &client_send("stop\n$cancel"));
 	&client_recv(my $fail);
-	unless($quiet) {
+	unless($s->quiet()) {
 		chomp($fail);
 		$s->error("jobs failed to close: $fail") if($fail ne '')
 	}
@@ -516,7 +551,7 @@ sub cmd_queue {
 	my $cmd = '[' .  &my_user() . '@' . &my_hostname() .
 		'(' . &my_hosttext() . ')' .
 		&my_cwd() . ']' . &join_quoted(@ARGV);
-	my $success = &client_send("$runmode\n$destjob\n" . $cmd);
+	my $success = &client_send("$runmode\n$destjob\n$cmd");
 	$success = '' unless(&client_recv($unique));
 	if($have) {
 		$unique =~ m{^([^\n]*)\n(.*)};
@@ -536,29 +571,86 @@ sub cmd_queue {
 	return '' unless(&closeclient());
 	my $sys = system(@ARGV);
 	if($sys < 0) {
-		$s->error('job could not be executed') unless($quiet);
+		$s->error('job could not be executed') unless($s->quiet());
 		$sys = 127
 	} elsif($sys & 127) {
 		$s->error('job died with signal ' . ($sys & 127) .
-			(($sys & 128) ? '' : ' (core dumped)')) unless($quiet);
+			(($sys & 128) ? '' : ' (core dumped)'))
+				unless($s->quiet());
 		$sys = 127
 	} else {
 		$sys >>= 8;
-		$s->error("exit with status " . $sys) if($sys && !$quiet);
+		$s->error("exit with status " . $sys) if($sys && !$s->quiet());
 	}
 	&set_exitstatus($sys);
 	&send_status($sys)
 }
 
 sub cmd_run {
-	&validate_jobs();
-	&runner(@_)
+	my ($runmode) = @_;
+	my $send = (($runmode eq 'exec') ? 'run' : $runmode) . "\n";
+	if(&validate_jobs(1)) {
+		return '' unless(&static_argv())
+	}
+	$s->forking();
+	for my $a (@ARGV) {
+		if($a =~ m{^u}) {
+			return '' unless(&runner("$send$a", my $job, my $status, 1));
+			next if($job eq '0');
+			if($status) {
+				&set_exitstatus($status);
+				return 1 if($runmode eq 'exec')
+			}
+			next
+		}
+		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
+			return '' unless(&runner("$send$i", my $job, my $status, 1));
+			if($job eq '0') {
+				if($end ne '') {
+					&set_exitstatus(1);
+					$s->error("illegal job number $i")
+				}
+				last
+			}
+			if($status) {
+				&set_exitstatus($status);
+				return 1 if($runmode eq 'exec')
+			}
+		}
+	}
+	1
 }
 
 sub cmd_parallel {
+	my ($waiting) = @_;
 	&validate_jobs();
-	return unless(&runner('bg'));
-	&runner('wait')
+	return '' unless(&openclient());
+	my %unique_ids = ();
+	for my $a (@ARGV) {
+		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
+			return '' unless(&runner("bg\n$i", my $job, my $stat));
+			if($job eq '0') {
+				if($end ne '') {
+					&set_exitstatus(1);
+					$s->error("illegal job number $i")
+				}
+				last
+			}
+			next unless($waiting);
+			if($stat eq '') {
+				$unique_ids{$job} = undef
+			} elsif($stat) {
+				&set_exitstatus($stat)
+			}
+		}
+	}
+	&client_send("\n");
+	return '' unless(&closeclient());
+	return 1 unless($waiting);
+	for my $id (keys(%unique_ids)) {
+		return '' unless(&runner("wait\n$id", my $job, my $stat, 1));
+		&set_exitstatus($stat) if(($job ne '0') && $stat)
+	}
 }
 
 { # Some static variables:
@@ -572,21 +664,22 @@ sub cmd_parallel {
 sub cmd_list {
 	&validate_jobs();
 	my $sent = '';
-	my $send = ($quiet ? 'status' : 'list');
+	my $send = ($s->quiet() ? 'status' : 'list');
 	for my $a (@ARGV) {
 		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
 			unless($sent) {
 				$sent = 1;
 				return '' unless(&openclient())
 			}
-			return '' unless(&client_send("$send\n$i"));
-			&client_recv(my $reply);
-			return '' unless($reply =~ s{^(\d+)\n?}{});
+			my $reply;
+			return '' unless(&client_send("$send\n$i") &&
+				&client_recv($reply) &&
+				($reply =~ s{^(\d+)\n?}{}));
 			my $job = $1;
 			if($job eq '0') {
 				last if($end eq '');
 				&set_exitstatus(1);
-				$s->error("illegal job number $job");
+				$s->error("illegal job number $i");
 				next
 			}
 			my $use_color = $s->color_stdout();
@@ -594,7 +687,8 @@ sub cmd_list {
 				$col_reset :
 				($col_reset = &my_color('reset'))) : '');
 			my $stat;
-			if($quiet) {
+			my $statspace = ' ';
+			if($s->quiet()) {
 				$stat = $reply
 			} else {
 				$reply =~ s{^([^\n]*)\n}{};
@@ -611,6 +705,7 @@ sub cmd_list {
 					($col_running = &my_color('bold yellow')))
 					: '') . 'running' . $reset
 			} elsif(&is_nonnegative($stat)) {
+				$statspace = ' ' x (8 - length($stat));
 				&set_exitstatus($stat);
 				$stat = ($stat ? (defined($col_failed) ?
 					$col_failed :
@@ -621,8 +716,8 @@ sub cmd_list {
 			} else {
 				return ''
 			}
-			next unless($quiet < 2);
-			if($quiet) {
+			next unless($s->quiet() < 2);
+			if($s->quiet()) {
 				print($stat . "\n");
 				next
 			}
@@ -635,12 +730,15 @@ sub cmd_list {
 			} elsif($nocommand) {
 				$reply = ''
 			}
+			my $jobspace = ((length($job) < 3) ?
+				(' ' x (3 - length($job))) : '');
 			if($use_color) {
-				print($col_job, $job, $reset, ' ',
-				$col_meta, '(', $stat, $col_meta, ')',
-				$reset, $reply, "\n")
+				print($jobspace, $col_job, $job, $reset,
+				$statspace, $col_meta, '(', $stat,
+				$col_meta, ')',	$reset, $reply, "\n")
 			} else {
-				print($job, ' (', $stat, ')', $reply, "\n")
+				print($jobspace, $job, $statspace,
+					'(', $stat, ')', $reply, "\n")
 			}
 		}
 	}
@@ -688,8 +786,9 @@ sub cmd_cancel {
 				$sent = 1;
 				return '' unless(&openclient())
 			}
-			return '' unless(&client_send("cancel\n$cancel\n$i"));
-			&client_recv(my $reply);
+			my $reply;
+			return '' unless(&client_send("cancel\n$cancel\n$i")
+				&& &client_recv($reply));
 			my ($job, $stat) = split(qr{\s+}, $reply);
 			if($job eq '0') {
 				last if($end eq '');
@@ -783,42 +882,57 @@ sub closeclient {
 }
 
 sub runner {
-	my ($runmode) = @_;
-	my $send = (($runmode eq 'exec') ? 'run' : $runmode) . "\n";
-	$s->forking() if($runmode ne 'bg');
+	my $send = shift();
+	my $nowait = !($_[2] // '');
+	return '' unless($nowait || &openclient());
+	my $reply;
+	my $ret = (&client_send($send) &&
+		&client_recv($reply) &&
+		($reply =~ m{^([^\n]*)\n?(\d*)\n?}));
+	$_[0] = my $num = $1;
+	my $stat = $2;
+	unless($nowait || ($num eq '0') || &is_nonnegative($stat)) {
+		$ret = '' unless(&client_recv($stat, 0) &&
+			(($stat eq '') || &is_nonnegative($stat)))
+	}
+	$_[1] = $stat;
+	($nowait || &closeclient()) && $ret
+}
+
+sub static_argv {
+	return '' unless(&openclient());
+	my @new = ();
+	my %know = ();
 	for my $a (@ARGV) {
+		unless($a =~ s{^\/}{}) {
+			push(@new, $a);
+			next
+		}
 		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
-			return '' unless(&openclient());
-			return '' unless(&client_send("$send$i"));
-			&client_recv(my $reply);
-			$reply =~ s{^(\d*)\n?}{};
-			my $job = $1;
-			if($job eq '0') {
+			my $result = $know{$i};
+			unless(defined($result)) {
+				return '' unless(&client_send("unique\n$i") &&
+					&client_recv($result));
+				$know{$i} = $result
+			}
+			if($result eq '0') {
 				if($end ne '') {
 					&set_exitstatus(1);
-					$s->error("illegal job number $job")
+					$s->error("illegal job number $i")
 				}
 				last
 			}
-			if($runmode ne 'bg') {
-				&client_recv(my $status, 0);
-				$status = $cancel
-					unless(&is_nonnegative($status));
-				if($status) {
-					&set_exitstatus($status);
-					return 1 if($runmode eq 'exec')
-				}
-			}
-			return '' unless(&closeclient())
+			push(@new, $result)
 		}
 	}
-	1
+	@ARGV = @new;
+	return '' unless(&client_send("\n"));
+	&closeclient()
 }
 
 sub send_status {
 	# Sending exitstatus must cause no errors/warnings:
-	&client_send("end\n" . "$unique\n" . "$exitstatus")
-		if(&openclient(1));
+	&client_send("end\n$unique\n$exitstatus") if(&openclient(1));
 	&closeclient(1);
 	1
 }
@@ -837,15 +951,19 @@ sub cancel_job {
 }
 
 
-# Check whether @ARGV are valid job specifications.
-# Let @ARGV = (':') if there are none and no argument is passed.
+# Check whether @ARGV are valid job specifications (with arg allow static ones)
+# Let @ARGV = (':') if there are none.
 
 sub validate_jobs {
 	unless(@ARGV) {
-		@ARGV = (':') unless(@_);
+		@ARGV = (':');
 		return
 	}
-	&valid_jobs(@ARGV)
+	unless(@_) {
+		&valid_jobs(@ARGV);
+		return
+	}
+	&valid_jobs_static(@ARGV)
 }
 
 sub valid_jobs {
@@ -853,6 +971,16 @@ sub valid_jobs {
 		$s->fatal('invalid job specification: ' . &join_quoted($i))
 			unless($i =~ m{^(?:[+-]?\d+|(?:[+-]?\d*\:[+-]?\d*))$})
 	}
+}
+
+sub valid_jobs_static {
+	my $ret = '';
+	for my $i (@_) {
+		$ret = 1 if($i =~ m{^\/});
+		$s->fatal('invalid job specification: ' . &join_quoted($i))
+			unless($i =~ m{^\/?(?:[+-]?\d+|(?:[+-]?\d*\:[+-]?\d*))$})
+	}
+	$ret
 }
 
 # Normalize and validate the value of @ok, @finished, @started.
@@ -991,7 +1119,6 @@ $s->get_options(
 	'ok|o=s', \@ok,
 	'finished|x=s', \@finished,
 	'started|s=s', \@started,
-	'quiet|q+', \$quiet
 );
 
 # Postprocess options:
@@ -1014,15 +1141,15 @@ if($action =~ m{^sto}i) {
 } elsif($action =~ m{^(?:e|x)}i) {
 	$ret = &cmd_run('exec')
 } elsif($action =~ m{^b}i) {
-	$ret = &cmd_run('bg')
+	$ret = &cmd_parallel('')
 } elsif($action =~ m{^p}i) {
-	$ret = &cmd_parallel()
+	$ret = &cmd_parallel(1)
 } elsif($action =~ m{^w}i) {
 	$ret = &cmd_run('wait')
 } elsif($action =~ m{^l}i) {
 	$ret = &cmd_list()
 } elsif($action =~ m{^stat}i) {
-	++$quiet;
+	$s->quiet($s->quiet() + 1);
 	$ret = &cmd_list()
 } elsif($action =~ m{^o}i) {
 	$ret = &cmd_have(\@ok)

@@ -21,7 +21,7 @@ use Schedule::Helpers qw(/./);
 
 use Exporter qw(import);
 
-our $VERSION = '1.1';
+our $VERSION = '2.0';
 
 sub new {
 	my ($class, $name, $ver) = @_;
@@ -34,12 +34,13 @@ sub new {
 		timeout => 10,
 		port => 8471,
 		password => undef,
+		file => undef,
 		stdout_term => undef,
 		stderr_term => undef,
 		color_stdout => undef,
 		color_stderr => undef,
 		color_force => undef,
-		file => undef
+		quiet => '0'
 	}, $class;
 	$s->fatal("$name version $ver differs from Schedule.pm version $VERSION")
 		if(defined($ver) && ($ver ne $VERSION));
@@ -91,6 +92,11 @@ sub password {
 sub file {
 	my $s = shift();
 	@_ ? ($s->{file} = shift()) : $s->{file}
+}
+
+sub quiet {
+	my $s = shift();
+	@_ ? ($s->{quiet} = shift()) : $s->{quiet}
 }
 
 sub stdout_term {
@@ -166,6 +172,7 @@ sub warning {
 sub get_options {
 	my $s = shift();
 	my @passfile = ();
+	my $quiet = 0;
 	Getopt::Long::Configure(qw(bundling gnu_compat no_permute));
 	GetOptions(
 	'tcp|t', sub { $s->tcp(1) },
@@ -178,8 +185,10 @@ sub get_options {
 	'addr|A=s', sub { $s->tcp(1); $s->addr($_[1]) },
 	'file|f=s', sub { $s->tcp(''); $s->file($_[1]) },
 	'timeout|T=i', sub { $s->timeout($_[1]) },
-	'background|bg|b', sub { $s->daemon('') },
-	'detach|daemon|B', sub { $s->daemon(1) },
+	'background|bg|b', sub { $s->daemon(0) },
+	'daemon|B', sub { $s->daemon(1) },
+	'detach|E', sub { $s->daemon(-1) },
+	'quiet|q+', \$s->{quiet},
 	'help|h', sub { pod2usage(1) },
 	'man|?', sub { pod2usage(-verbose => 2) },
 	'version|V', sub { print($s->name(), " $VERSION\n"); exit(0) },
@@ -210,7 +219,7 @@ sub check_options {
 	my $port = $s->port();
 	$s->fatal("illegal port $port")
 		unless(&is_nonnegative($port) && ($port <= 0xFFFF));
-	if($s->daemon() // '') {
+	if(($s->daemon() // 0) < 0) {
 		eval {
 			require POSIX;
 			POSIX->import()
@@ -241,21 +250,21 @@ sub forking {
 	my $s = shift();
 	return 1 unless(defined(my $d = $s->daemon()));
 	my $pid = fork();
-	$s->fatal('forking failed; running in foreground')
+	$s->error('forking failed; running in foreground')
 		unless(defined($pid));
 	exit(0) if($pid);
 	return 1 unless($d);
-	if(POSIX::setsid() < 0) {
+	if(($d < 0) && (POSIX::setsid() < 0)) {
 		$s->warning('cannot detach from controlling terminal');
 		return ''
 	}
 	my $ret = close(STDIN);
 	$ret = '' unless(close(STDOUT));
-	$ret = '' unless(close(STDERR));
+	$ret = '' unless(($d > 0) || close(STDERR));
 	my $devnull = File::Spec->devnull();
 	$ret = '' unless(open(STDIN, '<', $devnull));
 	$ret = '' unless(open(STDOUT, '+>', $devnull));
-	open(STDERR, '+>', $devnull) && $ret
+	(($d > 0) || open(STDERR, '+>', $devnull)) && $ret
 }
 
 sub default_filename {
@@ -274,6 +283,7 @@ sub conn_send_raw {
 sub conn_recv_raw {
 	my $s = shift();
 	my $conn = shift();
+	#  data = $_[0]
 	my $len = $_[1];
 	my $timeout = $_[2];
 	if($timeout && !IO::Select->new($conn)->can_read($timeout)) {
@@ -284,13 +294,16 @@ sub conn_recv_raw {
 		$s->error('cannot receive from socket: ' . $!);
 		return ''
 	}
+	if($_[0] eq '') {
+		$s->error('connection closed unexpectedly');
+		return ''
+	}
 	1
 }
 
 sub conn_send_smart {
 	my ($s, $conn, $data) = @_;
 	my $len = length($data);
-	my $timeout = ($_[1] // $s->timeout());
 	$s->conn_send_raw($conn, $len . (' ' x (32 - length($len))) . $data)
 }
 
@@ -302,7 +315,7 @@ sub conn_recv_smart {
 	$s->conn_recv_raw($conn, $len, 32, ($timeout // $s->timeout())) &&
 		$len =~ m{^(\d+) +$} &&
 		$s->conn_recv_raw($conn, $_[0], $1,
-			($timeout // 1) || $s->timeout())
+			(($timeout // 0) || $s->timeout()))
 }
 
 sub conn_send {

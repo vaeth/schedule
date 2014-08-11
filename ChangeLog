@@ -1,5 +1,16 @@
 # ChangeLog for schedule
 
+*schedule-2.0:
+	Martin Väth <martin at mvath.de>:
+	- Let exec, run, wait support static jobs and static job ranges to
+	  "cancel" the race condition as desired.
+	- Make parallel and bg race-free, parallel waiting only for the
+	  processes just started
+	- Let --daemon not discard stderr (in contrast to --detach)
+	- New server option -q: make server more verbose if -q is not passed
+	- Improve list output
+	- internal restructure of server loop
+
 *schedule-1.1:
 	Martin Väth <martin at mvath.de>:
 	- Introduce --bg, --daemon

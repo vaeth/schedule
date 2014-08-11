@@ -22,7 +22,7 @@ if(($FindBin::Bin // '') ne '') {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule-server', '1.1');
+my $s = Schedule::Connect->new('schedule-server', '2.0');
 
 =head1 NAME
 
@@ -130,7 +130,7 @@ the security implications: Everybody will be able to start/see/re-order/cancel
 your tasks unless you use encryption with B<--passfile>.
 This option implies B<--tcp> (unless overridden later on).
 
-=item B<--timeout=>I<seconds> or B<-T I<seconds>
+=item B<--timeout=>I<seconds> or B<-T> I<seconds>
 
 Time to wait in case of communication problems; the default is 10 B<seconds>.
 The value B<0> means to skip the timeout.
@@ -159,13 +159,24 @@ other users to see the commandline/environment (hence the password is visible).
 
 =item B<--background> or B<--bg> or B<-b>
 
-Fork into background mode. This option is not recommended for system servers:
+Fork into background mode.
+To use this option, your system must know fork(), of course.
+
+This option is not recommended for system servers:
 Use facilities of your init-system instead.
 
-=item B<--detach> or B<--daemon> or B<-B>
+=item B<--daemon> or B<-B>
 
-This is like B<--background>, but it also detaches from terminal and discards
-all subsequent standard input/output/error.
+This is like B<--background>, but it also partially detaches from terminal,
+discarding all subsequent standard input/output.
+
+This option is not recommended for system servers:
+Use facilities of your init-system instead.
+
+=item B<--detach> or B<-E>
+
+This is like B<--daemon>, but fully detaches from terminal, discarding also
+error output.
 To avoid unexpected issues with relatice paths, the current working directory
 is kept (and thus remains occupied). Therefore you might want to change to the
 root directory before using this option.
@@ -228,6 +239,10 @@ Try to color even if output is not a terminal.
 Do not color the output.
 Setting the environment variable B<ANSI_COLORS_DISABLED> has the same effect.
 
+=item B<--quiet> or B<-q> (accumulative)
+
+Be quiet.
+
 =item B<--help> or B<-h>
 
 Display brief help.
@@ -281,7 +296,7 @@ sub signal_handler {
 	&send_exit(7);
 	&closeserver();
 	unlink($s->file()) unless($s->tcp());
-	exit(130);
+	exit(130)
 }
 
 sub openserver {
@@ -314,150 +329,213 @@ sub closeserver {
 	$ret
 }
 
+{ # The big server loop with related variables and functions
+my $will_close;
+my $cmd;
+my $data;
+my $conn;
+
 sub serverloop {
-	while(defined(my $conn = $socket->accept())) {
-		my $will_close = 1;
-		my $data;
-		$data = '' unless($s->conn_recv($conn, $data));
+	while(defined($conn = $socket->accept())) {
+		unless($s->conn_recv($conn, $data)) {
+			$s->warning('broken connection attempt')
+				unless($s->quiet());
+			$conn->close();
+			next
+		}
+		$will_close = 1;
 		$data =~ s{^([^\n]*)\n?}{};
-		my $cmd = $1 // '';
+		$cmd = ($1 // '');
 		if($cmd eq 'version') {
 			$s->conn_send($conn, $s->version());
 			redo
 		} elsif(($cmd eq 'queue') || ($cmd eq 'start') || ($cmd eq 'start-or-queue')) {
-			my $send;
-			if($cmd eq 'start-or-queue') {
-				$data =~ s{$have_re}{};
-				$cmd = (&have_jobs($1, $2, $3) ? 'queue' : 'start');
-				$send = $cmd . "\n"
-			} else {
-				$send = ''
-			}
-			$data =~ s{^([+-]?\d*)\n}{};
-			my $index = &my_index($1, 1);
-			my $stat = (($cmd eq 'start') ? '' : undef);
-			++$unique;
-			splice(@$joblist, $index, 0, [$conn, $data, $stat, $unique, []]);
-			$s->conn_send($conn, $send . $serverid . $unique);
-			$will_close = '' unless(defined($stat))
-		} elsif(($cmd eq 'run') || ($cmd eq 'bg') || ($cmd eq 'wait')) {
-			my $i = &my_index($data);
-			my $reply = &indexname($i);
-			if($reply eq '0') {
-				$s->conn_send($conn, $reply);
-			} else {
-				my $job = $joblist->[$i];
-				my $stat = &get_status($job);
-				unless(defined($stat)) {
-					if($cmd ne 'wait') {
-						$stat = '';
-						&set_status($job, $stat);
-						$s->conn_send(&get_conn($job), 'run')
-					}
-				}
-				$s->conn_send($conn, $reply);
-				if($cmd ne 'bg') {
-					if(&is_nonempty($stat)) {
-						$s->conn_send($conn, $stat)
-					} else {
-						&push_wait($job, $conn);
-						$will_close = ''
-					}
-				}
-			}
+			&loop_queue()
 		} elsif($cmd eq 'end') {
-			$data =~ s{^([^\n]*)\n}{};
-			my $j = &job_from_unique($1);
-			if(defined($j)) {
-				&send_finish($j, $data);
-				my $stat = &get_status($j);
-				&set_status($j, $data) if(($stat // 1) eq '')
-			}
+			&loop_end()
+		} elsif(($cmd eq 'run') || ($cmd eq 'wait')) {
+			&loop_run()
+		} elsif(($cmd eq 'bg') || ($cmd eq 'unique')) {
+			&loop_bg()
 		} elsif($cmd eq 'cancel') {
-			while() {
-				$data =~ s{^(\d+)\n}{};
-				my $stat = ($1 // 0);
-				my $index = &my_index($data);
-				my $reply = &indexname($index);
-				if($reply ne '0') {
-					my $job = $joblist->[$index];
-					$reply .= "\n-" unless(&send_remove($job, $stat));
-					&send_finish($job, $stat);
-					&set_status($job, $stat)
-				}
-				last unless($s->conn_send($conn, $reply));
-				last unless($s->conn_recv($conn, $data));
-				last unless($data =~ s{^cancel\n?}{})
-			}
+			&loop_cancel()
 		} elsif(($cmd eq 'list') || ($cmd eq 'status')) {
-			while() {
-				my $i = &my_index($data);
-				my $reply = &indexname($i);
-				if($reply ne '0') {
-					my $job = $joblist->[$i];
-					my $stat = (&get_status($job) // '-');
-					$reply .= "\n$stat";
-					$reply .= "\n" . &get_cmd($job)
-						if($cmd eq 'list')
-				}
-				last unless($s->conn_send($conn, $reply));
-				last unless($s->conn_recv($conn, $data));
-				last unless($data =~ s{^(list|status)\n?}{});
-				$cmd = $1
-			}
+			&loop_list()
 		} elsif($cmd eq 'have') {
-			$data =~ m{$have_re};
-			$s->conn_send($conn, &have_jobs($1, $2, $3))
+			&loop_have()
 		} elsif($cmd eq 'insert') {
-			$data =~ s{([^\n]*\n)}{};
-			my $index = &my_index($1, 1);
-			my @insert = ();
-			for my $i (&unique_indices($data)) {
-				push(@insert, $joblist->[$i]);
-				$joblist->[$i] = undef
-			}
-			my $oldlist = $joblist;
-			$joblist = [];
-			for(my $i = 0; $i < $index; ++$i) {
-				my $j = $oldlist->[$i];
-				push(@$joblist, $j) if(defined($j))
-			}
-			push(@$joblist, @insert);
-			for(my $i = $index; $i < @$oldlist; ++$i) {
-				my $j = $oldlist->[$i];
-				push(@$joblist, $j) if(defined($j))
-			}
+			&loop_insert()
 		} elsif($cmd eq 'remove') {
-			$data =~ s{^(\d+)\n}{};
-			my $stat = ($1 // 0);
-			my @fail = ();
-			for my $i (&unique_indices($data)) {
-				my $job = $joblist->[$i];
-				push(@fail, &indexname($i))
-					unless(&send_remove($job, $stat));
-				&send_finish($job, $stat);
-				$joblist->[$i] = undef
-			}
-			my $oldlist = $joblist;
-			$joblist = [];
-			for(my $i = 0; $i < @$oldlist; ++$i) {
-				my $j = $oldlist->[$i];
-				push(@$joblist, $j) if(defined($j))
-			}
-			$s->conn_send($conn, join(' ', @fail) . "\n")
+			&loop_remove()
 		} elsif($cmd eq 'stop') {
-			$data =~ m{^(\d+)};
-			my $stat = ($1 // 0);
-			my @fail = &send_exit($stat);
-			my $ret = $s->conn_send($conn, join(' ', @fail) . "\n");
-			$ret = '' if(@fail);
-			$ret = '' unless($conn->close());
-			return $ret
+			return &loop_stop()
+		} elsif(!$s->quiet()) {
+			$s->warning('protocol violation')
 		}
 		$conn->close() if($will_close)
 	}
 	''
 }
+
+sub loop_queue {
+	my $send;
+	if($cmd eq 'start-or-queue') {
+		$data =~ s{$have_re}{};
+		$cmd = (&have_jobs($1, $2, $3) ? 'queue' : 'start');
+		$send = $cmd . "\n"
+	} else {
+		$send = ''
+	}
+	$data =~ s{^([+-]?\d*)\n}{};
+	my $index = &my_index($1, 1);
+	my $stat = (($cmd eq 'start') ? '' : undef);
+	++$unique;
+	splice(@$joblist, $index, 0, [$conn, $data, $stat, $unique, []]);
+	$s->conn_send($conn, $send . &form_unique());
+	$will_close = '' unless(defined($stat))
+}
+
+sub loop_run {
+	my $i = &my_index($data);
+	my $reply = &indexname($i);
+	if($reply eq '0') {
+		$s->conn_send($conn, $reply);
+		return
+	}
+	my $job = $joblist->[$i];
+	my $stat = &loop_bgjob($job, ($cmd eq 'wait'));
+	$s->conn_send($conn, $reply . "\n" . ($stat // '') . "\n");
+	return 1 if(&is_nonnegative($stat));
+	&push_wait($job, $conn);
+	$will_close = ''
+}
+
+sub loop_bg {
+	while() {
+		my $index = &my_index($data);
+		my $reply = &indexname($index);
+		if($reply ne '0') {
+			my $job = $joblist->[$index];
+			$reply = 'u' . &form_unique(&get_unique($job));
+			$reply .= "\n" . &loop_bgjob($job) . "\n"
+				if($cmd eq 'bg')
+		}
+		return unless($s->conn_send($conn, $reply));
+		return unless($s->conn_recv($conn, $data));
+		return unless($data =~ s{^(bg|unique)\n?}{});
+		$cmd = $1
+	}
+}
+
+sub loop_bgjob {
+	my ($job, $check_only) = @_;
+	my $stat = &get_status($job);
+	return $stat if(defined($stat) || ($check_only // ''));
+	&set_status($job, '');
+	$s->conn_send(&get_conn($job), 'run');
+	''
+}
+
+sub loop_end() {
+	$data =~ s{^([^\n]*)\n}{};
+	my $j = &job_from_unique($1);
+	if(defined($j)) {
+		&send_finish($j, $data);
+		my $stat = &get_status($j);
+		&set_status($j, $data) if(($stat // 1) eq '')
+	}
+}
+
+sub loop_cancel() {
+	while() {
+		$data =~ s{^(\d+)\n}{};
+		my $stat = ($1 // 0);
+		my $index = &my_index($data);
+		my $reply = &indexname($index);
+		if($reply ne '0') {
+			my $job = $joblist->[$index];
+			$reply .= "\n-" unless(&send_remove($job, $stat));
+			&send_finish($job, $stat);
+			&set_status($job, $stat)
+		}
+		return unless($s->conn_send($conn, $reply) &&
+			$s->conn_recv($conn, $data) &&
+			($data =~ s{^cancel\n?}{}))
+	}
+}
+
+sub loop_list() {
+	while() {
+		my $i = &my_index($data);
+		my $reply = &indexname($i);
+		if($reply ne '0') {
+			my $job = $joblist->[$i];
+			my $stat = (&get_status($job) // '-');
+			$reply .= "\n$stat";
+			$reply .= "\n" . &get_cmd($job) if($cmd eq 'list')
+		}
+		return unless($s->conn_send($conn, $reply));
+		return unless($s->conn_recv($conn, $data));
+		return unless($data =~ s{^(list|status)\n?}{});
+		$cmd = $1
+	}
+}
+
+sub loop_have() {
+	$data =~ m{$have_re};
+	$s->conn_send($conn, &have_jobs($1, $2, $3))
+}
+
+sub loop_insert() {
+	$data =~ s{([^\n]*\n)}{};
+	my $index = &my_index($1, 1);
+	my @insert = ();
+	for my $i (&unique_indices($data)) {
+		push(@insert, $joblist->[$i]);
+		$joblist->[$i] = undef
+	}
+	my $oldlist = $joblist;
+	$joblist = [];
+	for(my $i = 0; $i < $index; ++$i) {
+		my $j = $oldlist->[$i];
+		push(@$joblist, $j) if(defined($j))
+	}
+	push(@$joblist, @insert);
+	for(my $i = $index; $i < @$oldlist; ++$i) {
+		my $j = $oldlist->[$i];
+		push(@$joblist, $j) if(defined($j))
+	}
+}
+
+sub loop_remove() {
+	$data =~ s{^(\d+)\n}{};
+	my $stat = ($1 // 0);
+	my @fail = ();
+	for my $i (&unique_indices($data)) {
+		my $job = $joblist->[$i];
+		push(@fail, &indexname($i)) unless(&send_remove($job, $stat));
+		&send_finish($job, $stat);
+		$joblist->[$i] = undef
+	}
+	my $oldlist = $joblist;
+	$joblist = [];
+	for(my $i = 0; $i < @$oldlist; ++$i) {
+		my $j = $oldlist->[$i];
+		push(@$joblist, $j) if(defined($j))
+	}
+	$s->conn_send($conn, join(' ', @fail) . "\n")
+}
+
+sub loop_stop() {
+	$data =~ m{^(\d+)};
+	my $stat = ($1 // 0);
+	my @fail = &send_exit($stat);
+	my $ret = $s->conn_send($conn, join(' ', @fail) . "\n");
+	$ret = '' if(@fail);
+	$conn->close() && $ret
+}
+
+} # end of server loop
 
 sub send_exit {
 	my ($stat) = @_;
@@ -516,6 +594,11 @@ sub push_wait {
 	my $wait = $j->[4];
 	push(@$wait, $p)
 }
+
+sub form_unique {
+	$serverid . ($_[0] // $unique)
+}
+
 
 # return whether all jobs are ok, finished, started
 

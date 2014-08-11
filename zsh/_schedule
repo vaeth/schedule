@@ -16,9 +16,11 @@ service_opts=(
 '(--local -l '{'--tcp)-t','-t)--tcp'}'[use tcp socket (port)]'
 '(--tcp -t '{'--local)-l','-l)--local'}'[use unix domain socket (file)]'
 '(--no-color -nocolor -p '{'-F)--color','(--color)-F'}'[force color on non-terminal]'
-'(--color -F '{'--no-color --nocolor)-p','--nocolor -p)--no-color','--no-color -E)--nocolor'}'[non-colored output]'
-{'(--bg --background)-b','(--background -b)--bg','(--bg -b)--background'}'[run main task in background]'
-{'(--daemon --detach)-B','(--detach -B)--daemon','(--daemon -B)--detach'}'[run main task detached in background]'
+'(--color -F '{'--no-color --nocolor)-p','--nocolor -p)--no-color','--no-color -p)--nocolor'}'[non-colored output]'
+'(--daemon -B --detach -E '{'--bg --background)-b','--background -b)--bg','(--bg -b)--background'}'[run main task in background]'
+'(--bg --background -b --detach -E '{'--daemon)-B','-B)--daemon'}'[run semi-detached in background]'
+'(--bg --background -b --daemon -B '{'--detach)-E','-E)--detach'}'[run detached in background]'
+'*'{'-q','--quiet'}'[be more quiet (accumulative)]'
 )
 case ${service} in
 (*server)
@@ -49,7 +51,6 @@ case ${service} in
 '*'{'-x+','--finished='}'[have all jobs finished (accumulative)]:job range:(\:)'
 '*'{'-o+','--ok='}'[have all jobs succeeded (accumulative)]:job range:(\:)'
 '*'{'-s+','--started='}'[have all jobs started (accumulative)]:job range:(\:)'
-'*'{'-q','--quiet'}'[be more quiet (accumulative)]'
 '1:command:->cmds'
 '*:command:->rest'
 );;
@@ -95,16 +96,25 @@ case $state in
 			((CURRENT-=NORMARG))
 		fi
 	fi
+	local jobrange
+	jobrange=
 	case $cmd in
 	(*q*|s|start)
 		_normal
 		ret=$?;;
 	(sto*)
 		;;
+	(re*)
+		jobrange=(':');;
+	(w*|x*|e*|r*)
+		jobrange=('/:');;
 	(*)
-		_description jobrange expl 'job range'
-		compadd "$expl[@]" - : '1:'
-		ret=$?;;
-	esac;;
+		jobrange=(':');;
+	esac
+	if [[ $#jobrange -gt 0 ]]
+	then	_description jobrange expl 'job range'
+		compadd "$expl[@]" - $jobrange
+		ret=$?
+	fi;;
 esac
 return ret
