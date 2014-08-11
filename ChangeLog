@@ -2,6 +2,10 @@
 
 *schedule-2.0:
 	Martin Väth <martin at mvath.de>:
+	- Fix checks for ranges
+
+*schedule-2.0:
+	Martin Väth <martin at mvath.de>:
 	- Let exec, run, wait support static jobs and static job ranges to
 	  "cancel" the race condition as desired.
 	- Make parallel and bg race-free, parallel waiting only for the

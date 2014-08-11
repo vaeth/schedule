@@ -54,8 +54,8 @@ and B<q>.
 I<jobs> is either a job number or job range, that is, a string of the form
 I<from>B<:>I<to> where I<from> and B<to> may be omitted (and then mean 1
 or infinity, respectively). If no I<jobs> argument is given, it defaults
-to B<:>. Job numbers (also in job ranges) can be negative or 0: In this case,
-the counting is from the end of the queue.
+to B<:>. Job numbers can be negative or 0: In this case, the counting
+is from the end of the queue.
 
 For the commands B<run>, B<exec>, and B<wait>, the job number or job range
 can start with a leading B</> which indicates that the range is static.
@@ -524,7 +524,7 @@ sub cmd_stop_server {
 
 sub cmd_have {
 	my ($type) = @_;
-	&valid_jobs(@ARGV);
+	&validate_jobs(1, \@ARGV);
 	if(@ARGV) {
 		push(@$type, @ARGV);
 		&nonempty_have()
@@ -589,7 +589,7 @@ sub cmd_queue {
 sub cmd_run {
 	my ($runmode) = @_;
 	my $send = (($runmode eq 'exec') ? 'run' : $runmode) . "\n";
-	if(&validate_jobs(1)) {
+	if(&validate_jobs(-1)) {
 		return '' unless(&static_argv())
 	}
 	$s->forking();
@@ -806,7 +806,7 @@ sub cmd_cancel {
 }
 
 sub cmd_remove {
-	&validate_jobs();
+	&validate_jobs(1);
 	return '' unless(&openclient() &&
 		&client_send("remove\n$cancel\n" . join(' ', @ARGV)) &&
 		&client_recv(my $failed));
@@ -819,7 +819,7 @@ sub cmd_remove {
 }
 
 sub cmd_insert {
-	&validate_jobs();
+	&validate_jobs(1);
 	&openclient() && &client_send("insert\n$destjob\n" . join(' ', @ARGV))
 }
 
@@ -951,34 +951,35 @@ sub cancel_job {
 }
 
 
-# Check whether @ARGV are valid job specifications (with arg allow static ones)
-# Let @ARGV = (':') if there are none.
+# Check whether @ARGV (resp. passed array reference) are valid job
+# specifications.
+# If first arg is positive allow nonpositive args in ranges.
+# If first arg is negative allow static jobs/ranges.
+# return value is 1 if static ranges are actually used.
+# Let @ARGV = (':') if there are none (unless array reference is passed).
 
 sub validate_jobs {
-	unless(@ARGV) {
-		@ARGV = (':');
-		return
+	my ($strict, $array) = @_;
+	unless(defined($array)) {
+		unless(@ARGV) {
+			@ARGV = (':');
+			return
+		}
+		$array = \@ARGV
 	}
-	unless(@_) {
-		&valid_jobs(@ARGV);
-		return
+	my $re;
+	if(!($strict // '')) {
+		$re = qr{^(?:[+-]?\d+|(?:(?:|[1-9]\d*)\:(?:|[1-9]\d*)))$}
+	} elsif($strict < 0) {
+		$re = qr{^\/?(?:[+-]?\d+|(?:(?:|[1-9]\d*)\:(?:|[1-9]\d*)))$}
+	} else {
+		$re = qr{^(?:[+-]?\d+|(?:[+-]?\d*\:[+-]?\d*))$}
 	}
-	&valid_jobs_static(@ARGV)
-}
-
-sub valid_jobs {
-	for my $i (@_) {
-		$s->fatal('invalid job specification: ' . &join_quoted($i))
-			unless($i =~ m{^(?:[+-]?\d+|(?:[+-]?\d*\:[+-]?\d*))$})
-	}
-}
-
-sub valid_jobs_static {
 	my $ret = '';
-	for my $i (@_) {
-		$ret = 1 if($i =~ m{^\/});
-		$s->fatal('invalid job specification: ' . &join_quoted($i))
-			unless($i =~ m{^\/?(?:[+-]?\d+|(?:[+-]?\d*\:[+-]?\d*))$})
+	for my $i (@$array) {
+		$s->fatal('invalid job specification in this context: '
+			. &join_quoted($i)) unless($i =~ m{$re});
+		$ret = 1 if($i =~ m{^\/})
 	}
 	$ret
 }
@@ -991,7 +992,7 @@ sub nonempty_have {
 	for my $a (\@ok, \@finished, \@started) {
 		$ret = 1 if(@$a);
 		@$a = split(' ', join(' ', @$a));
-		&valid_jobs(@$a);
+		&validate_jobs(1, $a)
 	}
 	$ret
 }
@@ -1010,7 +1011,7 @@ sub have_args {
 
 sub start_end {
 	my ($a) = @_;
-	return ($a, $a) if($a =~ m{^\d+$});
+	return ($a, $a) if($a =~ m{^[+-]?\d+$});
 	$a =~ m{^(\d*)\:(\d*)$};
 	((($1 eq '') ? 1 : $1), $2)
 }
