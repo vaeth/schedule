@@ -22,7 +22,7 @@ if(($FindBin::Bin // '') ne '') {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule-server', '2.0');
+my $s = Schedule::Connect->new('schedule-server', '2.1');
 
 =head1 NAME
 
@@ -279,7 +279,7 @@ my $keepgroup = $keepuser;
 
 my $joblist = [];
 my $serverid = rand() . ":$$:";
-$serverid =~ s{^\s*\d*[.,]}{};
+$serverid =~ s{^\s*\d*[.,]}{u};
 my $unique = 0;
 my $socket = undef;
 
@@ -346,9 +346,16 @@ sub serverloop {
 		$will_close = 1;
 		$data =~ s{^([^\n]*)\n?}{};
 		$cmd = ($1 // '');
-		if($cmd eq 'version') {
-			$s->conn_send($conn, $s->version());
-			redo
+		if($cmd eq 'have') {
+			&loop_have()
+		} elsif(($cmd eq 'list') || ($cmd eq 'status')) {
+			redo if &loop_list()
+		} elsif($cmd eq 'close') {
+			# Sort according to expected frequency
+		} elsif($cmd eq 'last') {
+			redo if &loop_last()
+		} elsif($cmd eq 'version') {
+			redo if &loop_version()
 		} elsif(($cmd eq 'queue') || ($cmd eq 'start') || ($cmd eq 'start-or-queue')) {
 			&loop_queue()
 		} elsif($cmd eq 'end') {
@@ -356,25 +363,29 @@ sub serverloop {
 		} elsif(($cmd eq 'run') || ($cmd eq 'wait')) {
 			&loop_run()
 		} elsif(($cmd eq 'bg') || ($cmd eq 'unique')) {
-			&loop_bg()
+			redo if(&loop_bg())
 		} elsif($cmd eq 'cancel') {
-			&loop_cancel()
-		} elsif(($cmd eq 'list') || ($cmd eq 'status')) {
-			&loop_list()
-		} elsif($cmd eq 'have') {
-			&loop_have()
+			redo if &loop_cancel()
 		} elsif($cmd eq 'insert') {
 			&loop_insert()
 		} elsif($cmd eq 'remove') {
 			&loop_remove()
 		} elsif($cmd eq 'stop') {
 			return &loop_stop()
-		} elsif(!$s->quiet()) {
-			$s->warning('protocol violation')
+		} else {
+			$s->warning('protocol violation') unless($s->quiet())
 		}
 		$conn->close() if($will_close)
 	}
 	''
+}
+
+sub loop_last {
+	$s->conn_send($conn, &indexname(&my_index('0')))
+}
+
+sub loop_version {
+	$s->conn_send($conn, $s->version());
 }
 
 sub loop_queue {
@@ -411,20 +422,14 @@ sub loop_run {
 }
 
 sub loop_bg {
-	while() {
-		my $index = &my_index($data);
-		my $reply = &indexname($index);
-		if($reply ne '0') {
-			my $job = $joblist->[$index];
-			$reply = 'u' . &form_unique(&get_unique($job));
-			$reply .= "\n" . &loop_bgjob($job) . "\n"
-				if($cmd eq 'bg')
-		}
-		return unless($s->conn_send($conn, $reply));
-		return unless($s->conn_recv($conn, $data));
-		return unless($data =~ s{^(bg|unique)\n?}{});
-		$cmd = $1
+	my $index = &my_index($data);
+	my $reply = &indexname($index);
+	if($reply ne '0') {
+		my $job = $joblist->[$index];
+		$reply = &form_unique(&get_unique($job));
+		$reply .= "\n" . &loop_bgjob($job) . "\n" if($cmd eq 'bg')
 	}
+	$s->conn_send($conn, $reply)
 }
 
 sub loop_bgjob {
@@ -447,38 +452,29 @@ sub loop_end() {
 }
 
 sub loop_cancel() {
-	while() {
-		$data =~ s{^(\d+)\n}{};
-		my $stat = ($1 // 0);
-		my $index = &my_index($data);
-		my $reply = &indexname($index);
-		if($reply ne '0') {
-			my $job = $joblist->[$index];
-			$reply .= "\n-" unless(&send_remove($job, $stat));
-			&send_finish($job, $stat);
-			&set_status($job, $stat)
-		}
-		return unless($s->conn_send($conn, $reply) &&
-			$s->conn_recv($conn, $data) &&
-			($data =~ s{^cancel\n?}{}))
+	$data =~ s{^(\d+)\n}{};
+	my $stat = ($1 // 0);
+	my $index = &my_index($data);
+	my $reply = &indexname($index);
+	if($reply ne '0') {
+		my $job = $joblist->[$index];
+		$reply .= "\n-" unless(&send_remove($job, $stat));
+		&send_finish($job, $stat);
+		&set_status($job, $stat)
 	}
+	$s->conn_send($conn, $reply)
 }
 
 sub loop_list() {
-	while() {
-		my $i = &my_index($data);
-		my $reply = &indexname($i);
-		if($reply ne '0') {
-			my $job = $joblist->[$i];
-			my $stat = (&get_status($job) // '-');
-			$reply .= "\n$stat";
-			$reply .= "\n" . &get_cmd($job) if($cmd eq 'list')
-		}
-		return unless($s->conn_send($conn, $reply));
-		return unless($s->conn_recv($conn, $data));
-		return unless($data =~ s{^(list|status)\n?}{});
-		$cmd = $1
+	my $i = &my_index($data);
+	my $reply = &indexname($i);
+	if($reply ne '0') {
+		my $job = $joblist->[$i];
+		my $stat = (&get_status($job) // '-');
+		$reply .= "\n$stat";
+		$reply .= "\n" . &get_cmd($job) if($cmd eq 'list')
 	}
+	$s->conn_send($conn, $reply)
 }
 
 sub loop_have() {
@@ -647,23 +643,24 @@ sub unique_indices {
 	my %have = ();
 	my @ret = ();
 	for my $name (split(' ', ($_[0] // ''))) {
-		if($name =~ m{^(\d*)\:(\d*)$}) {
-			my $i = (($1 eq '') ? 1 : $1);
+		$name =~ s{^\/}{};
+		if($name =~ m{^([+-]?\d*)\:([+-]?\d*)$}) {
+			my $i = (($1 eq '') ? 0 : &my_index($1, 0));
 			my $end = &my_index($2, 0);
-			for($i = &my_index($i, 0); $i <= $end; ++$i) {
+			for(; $i <= $end; ++$i) {
 				next if(exists($have{$i}));
 				$have{$i} = 1;
 				push(@ret, $i)
 			}
 			next
-		} elsif($name =~ m{^\d+$}) {
+		} elsif($name =~ m{^[+-]?\d+$}) {
 			my $i = &my_index($name);
 			next if(exists($have{$i}));
 			$have{$i} = 1;
 			push(@ret, $i)
 		}
 	}
-	@ret
+	(@ret)
 }
 
 # return name corresponding to internal index $i
@@ -682,8 +679,9 @@ sub indexname {
 sub my_index {
 	my $arg = (shift() // 0);
 	my $max = scalar(@$joblist);
-	if($arg =~ m{^u(.*)$}) {
-		return (&index_from_unique($1) // 0)
+	$arg =~ s{^\/}{};
+	if($arg =~ m{^u}) {
+		return (&index_from_unique($arg) // 0)
 	}
 	$arg = 0 unless($arg =~ m{^[+-]?\d+$});
 	my $end = shift();

@@ -22,7 +22,7 @@ if(($FindBin::Bin // '') ne '') {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule', '2.0');
+my $s = Schedule::Connect->new('schedule', '2.1');
 
 =head1 NAME
 
@@ -53,9 +53,9 @@ and B<q>.
 
 I<jobs> is either a job number or job range, that is, a string of the form
 I<from>B<:>I<to> where I<from> and B<to> may be omitted (and then mean 1
-or infinity, respectively). If no I<jobs> argument is given, it defaults
-to B<:>. Job numbers can be negative or 0: In this case, the counting
-is from the end of the queue.
+or infinity, respectively). If no I<jobs> argument is given, it usually
+defaults to B<:>. Job numbers, I<from>, and B<to> can be negative or 0:
+In this case, the counting is from the end of the queue.
 
 For the commands B<run>, B<exec>, and B<wait>, the job number or job range
 can start with a leading B</> which indicates that the range is static.
@@ -354,14 +354,23 @@ B<schedule run> I<job> for each I<job> separately (for job ranges of the
 type B<:> or I<start>B<:> the end being changed dynamically).
 
 This is intentional so that modification of the job queue has effect
-to the command while it is running.
+to the command while it is running. In this context, there is a subtle
+difference in job ranges. For instance, B<schedule run :> differs from
+B<schedule run :0> in the sense that B<0> means the largest job
+in the moment when the command is started while the former counts through
+all jobs, even if some is added later on. Moreover, B<schedule run :0>
+even differs from B<schedule run :4 5:0> in the sense that the B<0> is
+in the latter case only evaluated after the finishing of job 4.
 
-However, this is not always desired. It is also possible to specify
-"static jobs" and "static job ranges" which means that these numbers/ranges
-refer to the queue in the moment when the command is executed and are not
-changed even if the job queue is modified later on. (There is one exception:
-If a job is removed from the queue, it is ignored as a static job,
-and its exit status is assumed to be 0.)
+The mentioned race condition is not always desired:
+Sometimes you may want to run particular jobs even if e.g. the job queue
+gets shifted because you inserted a further job in an earlier position.
+
+Therefore, it is also possible to specify "static jobs" and
+"static job ranges" which refer to the queue of that moment when the
+command is executed and are not changed even if the job queue is
+modified later on. (There is one exception: If a job is removed from the
+queue, it is ignored as a static job, and its exit status is assumed to be 0.)
 To specify a "static job" or "static job range", just type B</> in front of
 the job number or job range. Thus, for instance, the commands
 
@@ -369,7 +378,17 @@ B<schedule run /5:7 /0 /: :>
 
 will run the jobs 5, 6, 7, and the last from the current queue, followed
 by all of the rest of the current queue, followed by all commands which are
-possibly added to the queue until this happens.
+possibly added to the queue until this happens. We point out once more
+the subtle differences:
+
+B<schedule run /:4 /5:0> and B<schedule run /:0> and B<schedule run /:>
+
+are all equivalent (starting all jobs of the current queue, independent
+of later modifications) while the corresponding "non-static" specifications
+
+B<schedule run 4 5:0> and B<schedule run :0> and B<schedule run :>
+
+all differ due to the moment when B<0> is evaluated.
 
 =item B<exec> I<jobs>
 
@@ -524,7 +543,7 @@ sub cmd_stop_server {
 
 sub cmd_have {
 	my ($type) = @_;
-	&validate_jobs(1, \@ARGV);
+	&validate_jobs(\@ARGV);
 	if(@ARGV) {
 		push(@$type, @ARGV);
 		&nonempty_have()
@@ -588,10 +607,9 @@ sub cmd_queue {
 
 sub cmd_run {
 	my ($runmode) = @_;
+	&validate_jobs();
+	return '' unless(&static_argv());
 	my $send = (($runmode eq 'exec') ? 'run' : $runmode) . "\n";
-	if(&validate_jobs(-1)) {
-		return '' unless(&static_argv())
-	}
 	$s->forking();
 	for my $a (@ARGV) {
 		if($a =~ m{^u}) {
@@ -603,7 +621,7 @@ sub cmd_run {
 			}
 			next
 		}
-		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
+		for(my ($i, $end) = &start_end($a, undef, 1); ($end eq '') || ($i <= $end); ++$i) {
 			return '' unless(&runner("$send$i", my $job, my $status, 1));
 			if($job eq '0') {
 				if($end ne '') {
@@ -626,8 +644,9 @@ sub cmd_parallel {
 	&validate_jobs();
 	return '' unless(&openclient());
 	my %unique_ids = ();
+	my $last = undef;
 	for my $a (@ARGV) {
-		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
+		for(my ($i, $end) = &start_end($a, \$last); ($end eq '') || ($i <= $end); ++$i) {
 			return '' unless(&runner("bg\n$i", my $job, my $stat));
 			if($job eq '0') {
 				if($end ne '') {
@@ -644,13 +663,14 @@ sub cmd_parallel {
 			}
 		}
 	}
-	&client_send("\n");
+	&client_send('close');
 	return '' unless(&closeclient());
 	return 1 unless($waiting);
 	for my $id (keys(%unique_ids)) {
 		return '' unless(&runner("wait\n$id", my $job, my $stat, 1));
 		&set_exitstatus($stat) if(($job ne '0') && $stat)
 	}
+	1
 }
 
 { # Some static variables:
@@ -663,14 +683,13 @@ sub cmd_parallel {
 	my $col_job;
 sub cmd_list {
 	&validate_jobs();
-	my $sent = '';
+	my $last = undef;
+	my $is_open = '';
 	my $send = ($s->quiet() ? 'status' : 'list');
 	for my $a (@ARGV) {
-		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
-			unless($sent) {
-				$sent = 1;
-				return '' unless(&openclient())
-			}
+		for(my ($i, $end) = &start_end($a, \$last, \$is_open); ($end eq '') || ($i <= $end); ++$i) {
+			return '' unless($is_open || &openclient());
+			$is_open = 1;
 			my $reply;
 			return '' unless(&client_send("$send\n$i") &&
 				&client_recv($reply) &&
@@ -742,8 +761,8 @@ sub cmd_list {
 			}
 		}
 	}
-	return 1 unless($sent);
-	&client_send("\n")
+	return 1 unless($is_open);
+	&client_send('close')
 }
 # Subfunction of cmd_list to format "[user@host(hosttext)dir] cmd"
 # In case $use_color, the variables $col_reset, $col_meta are expected.
@@ -779,13 +798,12 @@ sub format_cmd {
 
 sub cmd_cancel {
 	&validate_jobs();
-	my $sent = '';
+	my $last = undef;
+	my $is_open = '';
 	for my $a (@ARGV) {
-		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
-			unless($sent) {
-				$sent = 1;
-				return '' unless(&openclient())
-			}
+		for(my ($i, $end) = &start_end($a, \$last, \$is_open); ($end eq '') || ($i <= $end); ++$i) {
+			return '' unless($is_open || &openclient());
+			$is_open = 1;
 			my $reply;
 			return '' unless(&client_send("cancel\n$cancel\n$i")
 				&& &client_recv($reply));
@@ -801,12 +819,12 @@ sub cmd_cancel {
 			}
 		}
 	}
-	return 1 unless($sent);
-	&client_send("\n")
+	return 1 unless($is_open);
+	&client_send('close')
 }
 
 sub cmd_remove {
-	&validate_jobs(1);
+	&validate_jobs();
 	return '' unless(&openclient() &&
 		&client_send("remove\n$cancel\n" . join(' ', @ARGV)) &&
 		&client_recv(my $failed));
@@ -819,7 +837,7 @@ sub cmd_remove {
 }
 
 sub cmd_insert {
-	&validate_jobs(1);
+	&validate_jobs();
 	&openclient() && &client_send("insert\n$destjob\n" . join(' ', @ARGV))
 }
 
@@ -900,17 +918,23 @@ sub runner {
 }
 
 sub static_argv {
-	return '' unless(&openclient());
 	my @new = ();
 	my %know = ();
+	my $last = undef;
+	my $is_open = '';
+	my $have_static = '';
 	for my $a (@ARGV) {
 		unless($a =~ s{^\/}{}) {
 			push(@new, $a);
 			next
 		}
-		for(my ($i, $end) = &start_end($a); ($end eq '') || ($i <= $end); ++$i) {
+		for(my ($i, $end) = &start_end($a, \$last, \$is_open); ($end eq '') || ($i <= $end); ++$i) {
 			my $result = $know{$i};
 			unless(defined($result)) {
+				unless($have_static) {
+					return '' unless($is_open || &openclient());
+					$have_static = $is_open = 1
+				}
 				return '' unless(&client_send("unique\n$i") &&
 					&client_recv($result));
 				$know{$i} = $result
@@ -925,9 +949,9 @@ sub static_argv {
 			push(@new, $result)
 		}
 	}
+	return ((!$is_open) || &closeclient()) unless($have_static);
 	@ARGV = @new;
-	return '' unless(&client_send("\n"));
-	&closeclient()
+	&client_send('close') && &closeclient()
 }
 
 sub send_status {
@@ -944,22 +968,19 @@ sub cancel_job {
 	&closeclient(1);
 	#&send_status($cancel);
 	&openclient(1) && &client_send("cancel\n$cancel\n" .
-		(defined($unique) ? "u$unique" : "$destjob"))
+		(defined($unique) ? $unique : $destjob))
 		&& &client_recv(my $reply)
-		&& &client_send("\n");
+		&& &client_send('close');
 	exit($cancel)
 }
 
 
 # Check whether @ARGV (resp. passed array reference) are valid job
 # specifications.
-# If first arg is positive allow nonpositive args in ranges.
-# If first arg is negative allow static jobs/ranges.
-# return value is 1 if static ranges are actually used.
 # Let @ARGV = (':') if there are none (unless array reference is passed).
 
 sub validate_jobs {
-	my ($strict, $array) = @_;
+	my ($array) = @_;
 	unless(defined($array)) {
 		unless(@ARGV) {
 			@ARGV = (':');
@@ -967,21 +988,10 @@ sub validate_jobs {
 		}
 		$array = \@ARGV
 	}
-	my $re;
-	if(!($strict // '')) {
-		$re = qr{^(?:[+-]?\d+|(?:(?:|[1-9]\d*)\:(?:|[1-9]\d*)))$}
-	} elsif($strict < 0) {
-		$re = qr{^\/?(?:[+-]?\d+|(?:(?:|[1-9]\d*)\:(?:|[1-9]\d*)))$}
-	} else {
-		$re = qr{^(?:[+-]?\d+|(?:[+-]?\d*\:[+-]?\d*))$}
-	}
-	my $ret = '';
 	for my $i (@$array) {
-		$s->fatal('invalid job specification in this context: '
-			. &join_quoted($i)) unless($i =~ m{$re});
-		$ret = 1 if($i =~ m{^\/})
+		$s->fatal('invalid job specification: ' . &join_quoted($i))
+			unless($i =~ qr{^\/?(?:[+-]?\d+|(?:[+-]?\d*\:[+-]?\d*))$})
 	}
-	$ret
 }
 
 # Normalize and validate the value of @ok, @finished, @started.
@@ -1007,13 +1017,55 @@ sub have_args {
 	$ret
 }
 
-# Check whether args are valid job specifications
+# Get job specification according to passed string.
+# For nonpositive numbers use the second argument as the last number.
+# If the second argument is not a number, query the server.
+# The second argument can also be a reference in which case the result
+# (if queried) is stored in that variable.
+# If querying, open a new connection if the third argument is true or
+# a reference with a false value. In the former case close the connection
+# again, in the latter case set the reference to true.
 
 sub start_end {
-	my ($a) = @_;
+	my $a = shift();
+	$a =~ s{^\/}{};
 	return ($a, $a) if($a =~ m{^[+-]?\d+$});
-	$a =~ m{^(\d*)\:(\d*)$};
-	((($1 eq '') ? 1 : $1), $2)
+	$a =~ m{^([+-]?\d*)\:([+-]?\d*)$};
+	my ($beg, $end) = ($1, $2);
+	$beg = 1 if($beg eq '');
+	my $begsub = ($beg <= 0);
+	my $endsub = (($end ne '') && ($end <= 0));
+	return ($beg, $end) unless($begsub || $endsub);
+	my $lastref = (shift() // '');
+	my $last = ((ref($lastref) eq '') ? $lastref : $$lastref);
+	unless(&is_nonnegative($last)) {
+		my $openref = (shift() // '');
+		my ($is_open, $keep_open);
+		if(ref($openref) eq '') {
+			$is_open = $keep_open = !$openref
+		} else {
+			$is_open = ($$openref // '');
+			$$openref = $keep_open = 1
+		}
+		if($is_open || &openclient()) {
+			&client_send('last') && &client_recv($last);
+			unless($keep_open) {
+				&client_send('close');
+				&closeclient()
+			}
+		}
+		return (1,0) unless(&is_nonnegative($last));
+		$$lastref = $last if(ref($lastref) ne '')
+	}
+	if($begsub) {
+		$beg += $last;
+		$beg = 1 if($beg <= 0)
+	}
+	if($endsub) {
+		$end += $last;
+		$end = 1 if($end <= 0)
+	}
+	($beg, $end)
 }
 
 # increase exitstatus to argument

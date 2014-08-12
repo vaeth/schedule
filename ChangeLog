@@ -1,6 +1,10 @@
 # ChangeLog for schedule
 
-*schedule-2.0:
+*schedule-2.2:
+	Martin Väth <martin at mvath.de>:
+	- Support nonpositive numbers in all job ranges; explain consequences
+
+*schedule-2.1:
 	Martin Väth <martin at mvath.de>:
 	- Fix checks for ranges
 
