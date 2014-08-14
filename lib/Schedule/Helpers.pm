@@ -21,9 +21,10 @@ our @EXPORT_OK = qw(
 	is_nonnegative
 	is_nonempty
 	split_quoted
+	join_quoted
 	env_to_array
 );
-our $VERSION = '2.1';
+our $VERSION = '3.0';
 
 sub signals {
 	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = ((@_) ? $_[0] : sub {1})
@@ -109,6 +110,20 @@ sub split_quoted {
 	}
 	push(@res, $word) if(defined($word));
 	@res
+}
+
+# like join(' ', @_), but shell-quote arguments
+
+sub join_quoted {
+	my @r;
+	for my $i (@_) {
+		my $a = $i;
+		$a =~ s{\'}{\'\\\'\'}g;
+		$a = "'$a'";
+		$a =~ s{(\A|[^\\])\'([\w\-\,\.\:\/]*)\'}{$1$2}gm;
+		push(@r, ($a ne '') ? $a : "''")
+	}
+	join(' ', @r)
 }
 
 sub env_to_array {

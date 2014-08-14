@@ -76,6 +76,8 @@ case $state in
 	'wait:wait until queued running jobs are finished'
 	'list:list queued jobs'
 	'status:status of queued jobs'
+	'address:address of queued jobs'
+	'number:number of queued jobs'
 	'ok:whether all jobs have finished ok'
 	'finished:whether all jobs have finished'
 	'started:whether all jobs have started'

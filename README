@@ -117,7 +117,7 @@ race-free, that is, if you modify the job queue while these commands are
 running (e.g. if you insert new jobs), they will adapt to the new queue
 dynamically. If you do not want that use static job numbers. For instance,
 	schdeule exec /:
-Will execute all jobs of the current queue, even if you modify the queue
+will execute all jobs of the current queue, even if you modify the queue
 later on (with some exception; see "schedule man" for details).
 
 Instead of sequential executing, one can also start more jobs in
@@ -151,6 +151,19 @@ more drastically, the last "schedule exec" will not restart any job again
 which has already been run, but only start the remaining job 4 if the
 former ones succeeded.
 
+The above commands have the disadvantage that if you run these "driver"
+scrips and stop them, if you have rearranged the queue meanwhile, you cannot
+just restart these scripts, since the queue numbers might refer to different
+jobs. To avoid this problem you can use "job addresses" instead which will
+not change. For details on this technical issue, see the section
+SPECIFYING JOBS of the schedule manpage ("schedule man"); if the job
+addresses are the same as the above numbers in the queue, you can use e.g.
+
+( schedule exec @1_@3; schedule-exec @5_@7; schedule exec @1_@3 @5_@7 @4)
+
+This script can then be restarted even with a modified queue but will refer
+to the original jobs.
+
 You can also run jobs in parallel. For instance,
 
 	schedule parallel 1 5
@@ -170,6 +183,7 @@ starts jobs 1 and 5 in parallel and returns. You can wait for their end with
 For further details on the various commands and options, use
 
 	schedule man
+	schedule-server man
 
 
 Security considerations: Encryption and Global vs. Local Servers

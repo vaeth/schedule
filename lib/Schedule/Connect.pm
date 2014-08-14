@@ -21,7 +21,7 @@ use Schedule::Helpers qw(/./);
 
 use Exporter qw(import);
 
-our $VERSION = '2.1';
+our $VERSION = '3.0';
 
 sub new {
 	my ($class, $name, $ver) = @_;
@@ -42,7 +42,7 @@ sub new {
 		color_force => undef,
 		quiet => '0'
 	}, $class;
-	$s->fatal("$name version $ver differs from Schedule.pm version $VERSION")
+	$s->fatal("$name version $ver differs from Schedule::Connect version $VERSION")
 		if(defined($ver) && ($ver ne $VERSION));
 	my $helpers = Schedule::Helpers->VERSION;
 	$s->fatal("Schedule::Helpers $helpers differs from Schedule.pm version $VERSION")
@@ -273,6 +273,31 @@ sub default_filename {
 	$s->file(File::Spec->catfile(File::Spec->tmpdir(),
 		'schedule-' . &my_user(), 'server'));
 	1
+}
+
+sub decode_range {
+	my $s = shift();
+	return undef unless(($_[0] // '') =~
+		m{^\/?(?:\@(\d+))?([+-]?\d+)?(?:([:_])(?:\@(\d+))?([+-]?(\d+))?)?$});
+	my ($atbeg, $beg, $sep) = (($1 // ''), ($2 // ''), ($3 // ''));
+	my ($atend, $end) = (($4 // ''), ($5 // ''));
+	$beg =~ s{^\+}{};
+	return ($atbeg, $beg, '') if($sep eq '');
+	$end =~ s{^\+}{};
+	if($sep eq '_') {
+		if(($atbeg eq '') || ($atend eq '')) {
+			return undef
+		}
+		if($beg eq '') {
+			$beg = $end
+		} elsif($end eq '') {
+			$end = $beg
+		} elsif($beg != $end) {
+			return undef
+		}
+	}
+	$beg = 1 if(($sep eq ':') && ($atbeg eq '') && ($beg eq ''));
+	($atbeg, $beg, $sep, $atend, $end)
 }
 
 sub conn_send_raw {

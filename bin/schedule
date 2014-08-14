@@ -13,6 +13,7 @@ use IO::Socket; # INET or UNIX, depending on user's choice
 #use Digest::SHA;     # needed for password protection
 #use POSIX;           # needed for --detach
 
+
 use lib '/usr/share/schedule';
 use FindBin;
 if(($FindBin::Bin // '') ne '') {
@@ -22,7 +23,7 @@ if(($FindBin::Bin // '') ne '') {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule', '2.1');
+my $s = Schedule::Connect->new('schedule', '3.0');
 
 =head1 NAME
 
@@ -43,7 +44,8 @@ schedule - queue jobs for later execution and schedule them
 I<command> is one of:
 
 B<run>, B<exec>, B<bg>, B<parallel>, B<wait>, B<list>, B<status>,
-B<ok>, B<finished>, B<started>, B<cancel>, B<remove>, B<insert>
+B<ok>, B<finished>, B<started>, B<cancel>, B<remove>, B<insert>,
+B<address>, B<number>
 
 commands can be shortcut by the shortest sequence which makes them unique.
 For instance, B<q> can be used instead of B<queue>, B<r> instead of B<run>.
@@ -51,16 +53,14 @@ B<s> (despite being non-unique) can be used instead of B<start>.
 Moreover, B<start-or-queue> can be abbreviated as anything containing B<s>
 and B<q>.
 
-I<jobs> is either a job number or job range, that is, a string of the form
-I<from>B<:>I<to> where I<from> and B<to> may be omitted (and then mean 1
-or infinity, respectively). If no I<jobs> argument is given, it usually
-defaults to B<:>. Job numbers, I<from>, and B<to> can be negative or 0:
-In this case, the counting is from the end of the queue.
+I<jobs> is either a job number, a job address (absolute or relative),
+a job range, or a job address range, see the section B<SPECIFYING JOBS>.
+Each I<jobs> can also start with a leading B</>
+which indicates that the range (or value) is considered static.
+If no I<jobs> arguments are given, the value B<:> is assumed
+(which means to select all jobs).
 
-For the commands B<run>, B<exec>, and B<wait>, the job number or job range
-can start with a leading B</> which indicates that the range is static.
-
-Exit status is usually the largest exit status of the scheduled command.
+The exit status is usually the largest exit status of the scheduled command.
 In case of a fatal communication error (e.g. server not started) the
 exit status 7 is returned.
 
@@ -166,7 +166,6 @@ This option implies B<--local> (unless overridden later on).
 
 Use port number I<port>; default is B<8471>.
 This option implies B<--tcp> (unless overridden later on).
-
 
 =item B<--addr=>I<addr> or B<-A> I<addr>
 
@@ -281,15 +280,16 @@ of B<uname -m> is used as a default (if nonempty).
 If this option is specified, B<schedule list> will suppress the output of
 the current working directory for the scheduled command.
 
-=item B<--keep-dir> or B<--keepdir> or B<-d>
-
-If this option is specified, the current working directory is not shortcut
-using the B<HOME> environment variable.
-
 =item B<--no-command> or B<--nocommand> or B<-c>
 
 If this option is specified, B<schedule list> will suppress the output of
 the queued command.
+
+=item B<--keep-dir> or B<--keepdir> or B<-d>
+
+If this option is specified with B<queue>, B<start>, or B<start-or-queue>,
+the current working directory is not shortcut using the B<HOME>
+environment variable. This influences the later output with B<schedule list>.
 
 =item B<--exit=>I<exitstatus> or B<-e> I<exitstatus>
 
@@ -354,41 +354,10 @@ B<schedule run> I<job> for each I<job> separately (for job ranges of the
 type B<:> or I<start>B<:> the end being changed dynamically).
 
 This is intentional so that modification of the job queue has effect
-to the command while it is running. In this context, there is a subtle
-difference in job ranges. For instance, B<schedule run :> differs from
-B<schedule run :0> in the sense that B<0> means the largest job
-in the moment when the command is started while the former counts through
-all jobs, even if some is added later on. Moreover, B<schedule run :0>
-even differs from B<schedule run :4 5:0> in the sense that the B<0> is
-in the latter case only evaluated after the finishing of job 4.
-
-The mentioned race condition is not always desired:
-Sometimes you may want to run particular jobs even if e.g. the job queue
-gets shifted because you inserted a further job in an earlier position.
-
-Therefore, it is also possible to specify "static jobs" and
-"static job ranges" which refer to the queue of that moment when the
-command is executed and are not changed even if the job queue is
-modified later on. (There is one exception: If a job is removed from the
-queue, it is ignored as a static job, and its exit status is assumed to be 0.)
-To specify a "static job" or "static job range", just type B</> in front of
-the job number or job range. Thus, for instance, the commands
-
-B<schedule run /5:7 /0 /: :>
-
-will run the jobs 5, 6, 7, and the last from the current queue, followed
-by all of the rest of the current queue, followed by all commands which are
-possibly added to the queue until this happens. We point out once more
-the subtle differences:
-
-B<schedule run /:4 /5:0> and B<schedule run /:0> and B<schedule run /:>
-
-are all equivalent (starting all jobs of the current queue, independent
-of later modifications) while the corresponding "non-static" specifications
-
-B<schedule run 4 5:0> and B<schedule run :0> and B<schedule run :>
-
-all differ due to the moment when B<0> is evaluated.
+to the command while it is running. If you do not want this, see the details
+in the section B<SPECIFYING JOBS>: Static job numbers or static job ranges
+are not subject to this race condition, Also jobs addresses avoid this
+race condition in a sense.
 
 =item B<exec> I<jobs>
 
@@ -431,19 +400,40 @@ they are considered to be finished, and their exit status is assumed to be 0.
 
 =item B<list> I<jobs>
 
-Lists the command line of the queued jobs (unless B<--quiet> is used once).
-Outputs whether the job are waiting/running/finished, and in the latter case
-which exit status they have (unless B<--quiet> is used twice).
-
-Normally the exit status of this command is 0, but if B<--quiet> is used twice
-or more often, the exit status is the largest exit status of the listed
-commands.
-
-Similarly to B<run>, this command is not race-free.
+Lists the queued jobs, their addresses, their exit status (or whether
+they are waiting/running, respectively), the user/host/current directory and
+command line of the scheduled commands. The output can be influenced
+by the options B<--no-user>, B<--no-host>, B<--no-dir>, or B<--no-command>.
 
 =item B<status> I<jobs>
 
-This is like B<--quiet> B<list>.
+This is a script-friendly variant of B<schedule list>:
+It outputs only the exit status of the selected job (or "waiting" or
+"running"), respectively, each output followed by a newline.
+If a job is not in the queue, the value B<-> is output.
+
+If used with B<--quiet>, nothing is output (except perhaps warnings/errors),
+but the exit status is different: It is the largest exit status of all
+finished I<jobs>. If used with B<--quiet>, it is an error if a job cannot
+be found (and in this case the exit status is at least 1).
+
+=item B<address> I<jobs>
+
+This is a script-friendly variant of B<schedule list>:
+This outputs the job addresses of the specified I<jobs>
+(each output followed by a newline).
+If a job cannot be found, the value B<0> is output.
+
+=item B<number> I<jobs>
+
+This is a script-friendly variant of B<schedule list>:
+This outputs the number of the specified I<jobs> in the queue
+(each output followed by a newline).
+If a job cannot be found, the value B<0> is output.
+
+For instance, B<schedule number 0> will effectively output the length of the
+queue (since the last job number in the queue is its length, and B<0> is
+output if there is no such job).
 
 =item B<ok>|B<finished>|B<started>
 
@@ -482,6 +472,190 @@ If they are running, their exit status will be ignored.
 The scheduler is forced to assume that the jobs finished with the
 exitstatus specified by B<--cancel> (default is B<0>).
 
+=item B<address> I<jobs>
+
+This outputs the job addresses of the specified I<jobs>
+(each output followed by a newline).
+
+=back
+
+=head1 SPECIFYING JOBS
+
+Whenever you have to pass a parameter which specifies a job,
+you can do this by specifying the job number.
+In this case, the number refers to the number in the queue.
+
+If you specify the number 0 or a negative number, the counting is backwards
+from the queue.
+
+Note that the association of a number to the job can change when you rearrange
+the queue (by the B<insert> or B<delete> command or by queuing new jobs
+not at the end of the queue).
+For this reason, there is also a possibility to specify jobs by their
+addresses. A job address has the form B<@>I<number> and can be seen by
+the output of the B<list> or B<address> command.
+Such a job address does never change. However, it can become invalid:
+If the job is removed from the queue, the address becomes invalid.
+
+Besides these (absolute) job addresses, it is also possible to specify
+relative job addresses which have the form B<@>I<number><summand>.
+For instance, if you want to address that job which comes in the queue
+immediately after the job with the address B<@5>, you would specify B<@5+1>.
+Similarly, B<@4-5> means the job which comes in the queue 5 places before
+job B<@4>.
+
+In most occassions you can enter also job ranges or job address ranges.
+
+A job range has the form I<from>B<:>I<to> where I<from> and I<to>
+are job numbers or (relative or absolute) job addresses.
+A job range consists of all jobs from the queue between B<from> and B<to>
+(boundaries inclusive); if B<from> is omitted, the range consists of all jobs
+in the queue until B<to> (inclusive) and if B<to> is ommitted, the range
+consists of all jobs in the queue starting from B<from> (inclusive).
+If B<to> comes before B<from> in the queue then the range is empty.
+
+Some examples of job ranges:
+
+=over 8
+
+=item B<1:3>
+B<:3>
+
+These are both equivalent and mean the first three jobs in the queue.
+
+=item B<-2:>
+
+This gives the last three jobs in the queue (-2, -1, and 0).
+
+=item B<:>
+
+This means all jobs in the queue. This is the default, for instance,
+if you specify no further arguments after B<schedule run>.
+
+=item B<2:1>
+
+This strange example specifies an empty job range. You can use this if
+for some reason you want to override the default B<:> and really want to
+specify B<no> jobs (although this hardly ever makes any sense).
+
+=item B<@2:@1>
+
+This can be a nonempty job range, since it can happen that the job with
+address B<@2> appears in the queue before that with address B<@1>.
+
+=item B<@1-1:@1+2>
+
+This consists of 4 jobs: The job in the queue before that with address B<@1>,
+then the job B<@1>, and the two subsequent ones in the queue.
+
+=item B<@1+1:@1>
+
+This is the empty range (or an error if there is no job with address B<@1>
+in the queue).
+
+=back
+
+A job address range has the form I<from>B<_>I<to>, where I<from> and I<to>
+are (absolute or relative) job addresses. This is just a convenience shortcut
+and means all addresses with address numbers between that from I<from> and
+I<to>. (The queue is ignored here.)
+
+If you specify relative addresses in I<from> and I<to>, the summand may occur
+either in I<from> or in I<to>, but it is invalid to specify different
+summands, of course.
+
+Some examples of job address ranges:
+
+=over 8
+
+=item B<@1_@3>
+
+The range consists of the three jobs with addresses B<@1>, B<@2>, and B<@3>.
+
+=item B<@2_@1>
+
+This is the empty range. Not to be confused with B<@2:@1> which can be
+nonempty (see the earlier examples).
+
+=item B<@2-1_@4-1> or B<@2-1_@4> or B<@2_@4-1>
+
+These all mean the same, namely the three jobs with the relative addressses
+B<@2-1>, B<@3-1>, and B<@4-1>. In other words, these are the three jobs in the
+queue before those with the respective job addresses B<@2>, B<@3>, and B<@4>.
+
+=item B<@2-1_@4-2>
+
+This makes no sense.
+
+=back
+
+All job numbers, job addresses, job ranges, and job address ranges can also
+be marked to be "static". This makes only sense for the commands
+B<exec>, B<run>, and B<wait> which can be subject to a race condition.
+
+Marking a range or an address as "static" is similar to specifying a
+corresponding absolute job address or absolute job address range,
+where the address is resolved in the moment when the command is started.
+The only differences is that the job address(es) are also associated with
+the server, that is, the corresponding job is considered to be removed from
+the queue even if the schedule-server has been shut down and restarted and
+another job with the same address has been queued with that new
+schedule-server.
+
+To mark a range or an address static, simply preceed it with "/".
+You can mark only a whole range (or address range) static, not individual
+addresses in it. For example, B</1:2> means that the whole range B<1:2>
+is considered to be static; the syntax B<1:/2> is invalid.
+
+Examples with static ranges:
+
+=over 8
+
+=item B<schedule run /5:7 /0 /: :>
+
+This will run the jobs 5, 6, 7, and the last from the current queue, followed
+by all of the rest of the current queue, followed by all commands which are
+possibly added to the queue until this happens.
+
+=item B<schedule run /:4 /5:0>
+
+=item B<schedule run /:0>
+
+=item B<schedule run /:>
+
+These are all equivalent: They start all jobs of the current queue
+successively, independent of later modifications of the queue.
+
+=item B<schedule run :4 5:0>
+
+=item B<schedule run :0>
+
+=item B<schedule run :>
+
+In contrast to the previous example, these are not equivalent:
+They differ in the moment when B<0> is evaluated (and replaced by the
+last number in the queue). In the first case, B<0> is evaluated in the
+moment when the 5th job gets started, in the second case immediately,
+and in the last case changes in the length of the queue are always honoured.
+
+=item B<schedule run @1_@4>
+
+=item B<schedule run /@1_@4>
+
+Despite job addresses are used, these two commands are not completey
+equivalent: the latter binds the addresses also to the server
+as mentioned before, that is, it is not possible to "trick" it by
+exchanging the server and starting new jobs with addreses B<@2> B<@3>,
+or B<@4> (job B<@1> is started immediately, so for this job there is no race).
+
+=item B<schedule run @1 /@1+1>
+
+The last argument looks like a relative job address, but it only partially
+behaves like such: It is the job which is queued after the job with the
+address B<@1> when the command is executed, even if that queue will change
+while that job is running. Without the B</> symbol the job actually referred
+to might change.
+
 =back
 
 =head1 COPYRIGHT AND LICENSE
@@ -514,17 +688,7 @@ my $unique = undef;
 my $socket = undef;
 my $exitstatus = 0;
 my $devnull = File::Spec->devnull();
-
-my $col_reset = undef;
-my $col_waiting = undef;
-my $col_running = undef;
-my $col_ok = undef;
-my $col_failed = undef;
-my $col_meta = undef;
-my $col_job;
-my $col_user = undef;
-my $col_host;
-my $col_dir = undef;
+my %known_ats = ();
 
 #
 # Commands
@@ -609,26 +773,19 @@ sub cmd_run {
 	my ($runmode) = @_;
 	&validate_jobs();
 	return '' unless(&static_argv());
-	my $send = (($runmode eq 'exec') ? 'run' : $runmode) . "\n";
+	my $send = $runmode;
+	$send = 'run' if($runmode eq 'exec');
+	$send .= "\n";
 	$s->forking();
 	for my $a (@ARGV) {
-		if($a =~ m{^u}) {
-			return '' unless(&runner("$send$a", my $job, my $status, 1));
-			next if($job eq '0');
-			if($status) {
-				&set_exitstatus($status);
-				return 1 if($runmode eq 'exec')
-			}
-			next
-		}
-		for(my ($i, $end) = &start_end($a, undef, 1); ($end eq '') || ($i <= $end); ++$i) {
-			return '' unless(&runner("$send$i", my $job, my $status, 1));
+		for(my $iter = &start_end($a, undef, 1);
+			$iter->unfinished(); $iter->increase()) {
+			return '' unless(&runner($send . $iter->current(),
+				my $job, my $status, 1));
 			if($job eq '0') {
-				if($end ne '') {
-					&set_exitstatus(1);
-					$s->error("illegal job number $i")
-				}
-				last
+				last unless($iter->cond_error());
+				&set_exitstatus(1);
+				next
 			}
 			if($status) {
 				&set_exitstatus($status);
@@ -646,14 +803,14 @@ sub cmd_parallel {
 	my %unique_ids = ();
 	my $last = undef;
 	for my $a (@ARGV) {
-		for(my ($i, $end) = &start_end($a, \$last); ($end eq '') || ($i <= $end); ++$i) {
-			return '' unless(&runner("bg\n$i", my $job, my $stat));
+		for(my $iter = &start_end($a, \$last);
+			$iter->unfinished(); $iter->increase()) {
+			return '' unless(&runner("bg\n" . $iter->current(),
+				my $job, my $stat));
 			if($job eq '0') {
-				if($end ne '') {
-					&set_exitstatus(1);
-					$s->error("illegal job number $i")
-				}
-				last
+				last unless($iter->cond_error());
+				&set_exitstatus(1);
+				next
 			}
 			next unless($waiting);
 			if($stat eq '') {
@@ -677,72 +834,114 @@ sub cmd_parallel {
 	my $col_reset = undef;
 	my $col_waiting = undef;
 	my $col_running = undef;
+	my $col_nojob = undef;
 	my $col_ok = undef;
 	my $col_failed = undef;
 	my $col_meta = undef;
 	my $col_job;
+	my $col_addr;
 sub cmd_list {
+	my ($type) = @_;
 	&validate_jobs();
 	my $last = undef;
 	my $is_open = '';
-	my $send = ($s->quiet() ? 'status' : 'list');
+	my $send = $type;
+	$send = 'status' if($type ne 'list');
+	$send .= "\n";
 	for my $a (@ARGV) {
-		for(my ($i, $end) = &start_end($a, \$last, \$is_open); ($end eq '') || ($i <= $end); ++$i) {
+		for(my $iter = &start_end($a, \$last, \$is_open);
+			$iter->unfinished(); $iter->increase()) {
 			return '' unless($is_open || &openclient());
 			$is_open = 1;
 			my $reply;
-			return '' unless(&client_send("$send\n$i") &&
+			return '' unless(&client_send($send . $iter->current()) &&
 				&client_recv($reply) &&
 				($reply =~ s{^(\d+)\n?}{}));
 			my $job = $1;
+			my ($addr, $stat, $found);
+			my $quiet = ($s->quiet());
 			if($job eq '0') {
-				last if($end eq '');
-				&set_exitstatus(1);
-				$s->error("illegal job number $i");
-				next
+				$found = '';
+				my $no_error = (($type eq 'number') ||
+					($type eq 'address') ||
+					(($type eq 'status') && !$quiet));
+				last unless($iter->cond_error($quiet ||
+					$no_error));
+				unless($no_error) {
+					&set_exitstatus(1);
+					next
+				}
+			} else {
+				$found = 1;
+				$reply =~ s{^([^\n]*)\n?}{};
+				$addr = ($1 // '');
+				if($type ne 'list') {
+					$stat = $reply
+				} else {
+					$reply =~ s{^([^\n]*)\n?}{};
+					$stat = ($1 // '')
+				}
+				if($quiet) {
+					&set_exitstatus($stat) if($stat &&
+						($type eq 'status'));
+					next
+				}
 			}
 			my $use_color = $s->color_stdout();
-			my $reset = ($use_color ? (defined($col_reset) ?
-				$col_reset :
-				($col_reset = &my_color('reset'))) : '');
-			my $stat;
+			my $reset = ($use_color ?
+				($col_reset //= &my_color('reset')) : '');
 			my $statspace = ' ';
-			if($s->quiet()) {
-				$stat = $reply
-			} else {
-				$reply =~ s{^([^\n]*)\n}{};
-				$stat = $1
-			}
-			if($stat eq '-') {
-				$stat = ($use_color ? (defined($col_waiting) ?
-					$col_waiting :
-					($col_waiting = &my_color('bold blue')))
-					: '') . 'waiting' . $reset
+			if(!$found) {
+				$statspace = (' ' x 7);
+				$stat = '-';
+				if($use_color) {
+					$col_nojob //= &my_color('bold red');
+					$stat = $col_nojob . $stat . $reset
+				}
+			} elsif($stat eq '-') {
+				$stat = ($use_color ? ($col_waiting //=
+					&my_color('bold blue')) : '')
+					. 'waiting' . $reset
 			} elsif($stat eq '') {
-				$stat = ($use_color ? (defined($col_running) ?
-					$col_running :
-					($col_running = &my_color('bold yellow')))
-					: '') . 'running' . $reset
+				$stat = ($use_color ? ($col_running //=
+					&my_color('bold yellow')) : '')
+					. 'running' . $reset
 			} elsif(&is_nonnegative($stat)) {
-				$statspace = ' ' x (8 - length($stat));
-				&set_exitstatus($stat);
-				$stat = ($stat ? (defined($col_failed) ?
-					$col_failed :
-					($col_failed = &my_color('bold red')))
-					: (defined($col_ok) ? $col_ok :
-					($col_ok = &my_color('bold green'))))
+				$statspace = (' ' x (8 - length($stat)));
+				$stat = ($stat ? ($col_failed //=
+					&my_color('bold red')) :
+					($col_ok //= &my_color('bold green')))
 					. $stat . $reset if($use_color)
 			} else {
+				$s->fatal('strange server reply');
 				return ''
 			}
-			next unless($s->quiet() < 2);
-			if($s->quiet()) {
+			if($type eq 'status') {
 				print($stat . "\n");
 				next
 			}
 			if($use_color && !defined($col_meta)) {
 				$col_meta = &my_color('cyan');
-				$col_job = &my_color('bold')
+				$col_job = &my_color('bold');
+				$col_addr = &my_color('bold cyan')
+			}
+			if($type eq 'address') {
+				if($use_color) {
+					print(($found ? $col_addr : $col_nojob),
+						$addr, $reset, "\n")
+				} else {
+					print($addr, "\n")
+				}
+				next
+			}
+			if($type eq 'number') {
+				if($use_color) {
+					print(($found ? $col_job : $col_nojob),
+						$job, $reset, "\n")
+				} else {
+					print($job, "\n")
+				}
+				next
 			}
 			if($reply =~ s{\[([^@]*)@([^\(]*)\(([^\)]*)\)([^\]]*)\]}{}) {
 				$reply = &format_cmd($use_color, $1, $2, $3, $4, $reply)
@@ -751,13 +950,16 @@ sub cmd_list {
 			}
 			my $jobspace = ((length($job) < 3) ?
 				(' ' x (3 - length($job))) : '');
+			my $addrspace = ((length($addr) < 4) ?
+				(' ' x (4 - length($addr))) : '');
 			if($use_color) {
 				print($jobspace, $col_job, $job, $reset,
+				$addrspace, $col_addr, $addr, $reset,
 				$statspace, $col_meta, '(', $stat,
-				$col_meta, ')',	$reset, $reply, "\n")
+				$col_meta, ')', $reset, $reply, "\n")
 			} else {
-				print($jobspace, $job, $statspace,
-					'(', $stat, ')', $reply, "\n")
+				print($jobspace, $job, $addrspace, $addr,
+				$statspace, '(', $stat, ')', $reply, "\n")
 			}
 		}
 	}
@@ -801,17 +1003,18 @@ sub cmd_cancel {
 	my $last = undef;
 	my $is_open = '';
 	for my $a (@ARGV) {
-		for(my ($i, $end) = &start_end($a, \$last, \$is_open); ($end eq '') || ($i <= $end); ++$i) {
+		for(my $iter = &start_end($a, \$last, \$is_open);
+			$iter->unfinished(); $iter->increase()) {
 			return '' unless($is_open || &openclient());
 			$is_open = 1;
 			my $reply;
-			return '' unless(&client_send("cancel\n$cancel\n$i")
-				&& &client_recv($reply));
+			return '' unless(&client_send("cancel\n$cancel\n",
+				$iter->current()) && &client_recv($reply));
 			my ($job, $stat) = split(qr{\s+}, $reply);
 			if($job eq '0') {
-				last if($end eq '');
+				last unless($iter->cond_error());
 				&set_exitstatus(1);
-				$s->error("illegal job number $i")
+				next
 			}
 			if($stat) {
 				&set_exitstatus(1);
@@ -928,7 +1131,9 @@ sub static_argv {
 			push(@new, $a);
 			next
 		}
-		for(my ($i, $end) = &start_end($a, \$last, \$is_open); ($end eq '') || ($i <= $end); ++$i) {
+		for(my $iter = &start_end($a, \$last, \$is_open);
+			$iter->unfinished(); $iter->increase()) {
+			my $i = $iter->current();
 			my $result = $know{$i};
 			unless(defined($result)) {
 				unless($have_static) {
@@ -940,13 +1145,11 @@ sub static_argv {
 				$know{$i} = $result
 			}
 			if($result eq '0') {
-				if($end ne '') {
-					&set_exitstatus(1);
-					$s->error("illegal job number $i")
-				}
-				last
+				last unless($iter->cond_error());
+				&set_exitstatus(1);
+				next
 			}
-			push(@new, $result)
+			push(@new, $result . "\n" . $i . "\n" . $a)
 		}
 	}
 	return ((!$is_open) || &closeclient()) unless($have_static);
@@ -967,10 +1170,10 @@ sub cancel_job {
 	&signals();
 	&closeclient(1);
 	#&send_status($cancel);
-	&openclient(1) && &client_send("cancel\n$cancel\n" .
-		(defined($unique) ? $unique : $destjob))
-		&& &client_recv(my $reply)
-		&& &client_send('close');
+	&openclient(1) &&
+		&client_send("cancel\n$cancel\n" . ($unique // $destjob)) &&
+		&client_recv(my $reply) &&
+		&client_send('close');
 	exit($cancel)
 }
 
@@ -989,8 +1192,9 @@ sub validate_jobs {
 		$array = \@ARGV
 	}
 	for my $i (@$array) {
+		my ($valid) = $s->decode_range($i);
 		$s->fatal('invalid job specification: ' . &join_quoted($i))
-			unless($i =~ qr{^\/?(?:[+-]?\d+|(?:[+-]?\d*\:[+-]?\d*))$})
+			unless(defined($valid))
 	}
 }
 
@@ -1017,55 +1221,206 @@ sub have_args {
 	$ret
 }
 
+# Iterator constructor:
 # Get job specification according to passed string.
-# For nonpositive numbers use the second argument as the last number.
-# If the second argument is not a number, query the server.
+# For nonpositive numbers use the second argument as the largest job number
+# instead of querying the server.
 # The second argument can also be a reference in which case the result
 # (if queried) is stored in that variable.
 # If querying, open a new connection if the third argument is true or
 # a reference with a false value. In the former case close the connection
 # again, in the latter case set the reference to true.
+# The return value is a class of type Iterator with subsequent methods
 
 sub start_end {
 	my $a = shift();
-	$a =~ s{^\/}{};
-	return ($a, $a) if($a =~ m{^[+-]?\d+$});
-	$a =~ m{^([+-]?\d*)\:([+-]?\d*)$};
-	my ($beg, $end) = ($1, $2);
-	$beg = 1 if($beg eq '');
-	my $begsub = ($beg <= 0);
-	my $endsub = (($end ne '') && ($end <= 0));
-	return ($beg, $end) unless($begsub || $endsub);
-	my $lastref = (shift() // '');
-	my $last = ((ref($lastref) eq '') ? $lastref : $$lastref);
-	unless(&is_nonnegative($last)) {
-		my $openref = (shift() // '');
-		my ($is_open, $keep_open);
+	my $self = bless {
+		finished => '',
+		atbeg => undef,
+		beg => undef,
+		sep => '',
+		atend => undef,
+		end => undef
+	};
+	if($a =~ m{^u}) {
+		$self->{atbeg} = '';
+		($self->{beg}, $self->{atend}, $self->{end}) = split(m{\n}, $a);
+		return $self
+	}
+	my ($atbeg, $beg, $sep, $atend, $end) = $s->decode_range($a);
+	unless(defined($atbeg)) {
+		$self->{finished} = 1;
+		return $self
+	}
+	($self->{atbeg}, $self->{beg}, $self->{sep}) = ($atbeg, $beg, $sep);
+	return $self if($sep eq '');
+	($self->{atend}, $self->{end}) = ($atend, $end);
+	return $self if($sep eq '_');
+	my $beglast = (($atbeg eq '') && ($beg <= 0));
+	my $endlast = (($atend eq '') && ($end ne '') && ($end <= 0));
+	return $self unless($beglast || $endlast ||
+		($atbeg ne '') || ($atend ne ''));
+	my ($lastref, $openref) = @_;
+	my $last = undef;
+	my $is_open = undef;
+	my $noclose = 1;
+	my $s_open = sub {
+		return $is_open if(defined($is_open));
+		$openref = '' unless(defined($openref));
 		if(ref($openref) eq '') {
-			$is_open = $keep_open = !$openref
+			$is_open = $noclose = !$openref
 		} else {
 			$is_open = ($$openref // '');
-			$$openref = $keep_open = 1
+			$$openref = $noclose = 1
 		}
-		if($is_open || &openclient()) {
-			&client_send('last') && &client_recv($last);
-			unless($keep_open) {
-				&client_send('close');
-				&closeclient()
-			}
+		unless($is_open || &openclient()) {
+			$noclose = 1;
+			return ''
 		}
-		return (1,0) unless(&is_nonnegative($last));
-		$$lastref = $last if(ref($lastref) ne '')
+		$is_open = 1
+	};
+	my $s_close = sub {
+		return if($noclose);
+		&client_send('close');
+		&closeclient();
+		$noclose = 1
+	};
+	my $s_last = sub {
+		return &is_nonnegative($last) if(defined($last));
+		$last = ((ref($lastref) eq '') ? $lastref : $$lastref);
+		return 1 if(&is_nonnegative($last));
+		return '' unless(&{$s_open}());
+		&client_send("status\n0") &&
+			&client_recv($last) &&
+			($last //= '') &&
+			($last =~ s{^(\d+).*}{$1});
+		$last //= '';
+		&is_nonnegative($last)
+	};
+	my $s_at = sub {
+		my ($at) = @_;
+		my $ret = $known_ats{$at};
+		return $ret if(defined($ret));
+		return '' unless(&{$s_open}());
+		return '' unless(&client_send("status\n\@$at") &&
+			&client_recv($ret) &&
+			defined($ret) &&
+			$ret =~ m{^(\d+)});
+		$known_ats{$at} = $1;
+	};
+	my $s_add = sub {
+		my ($at, $addref) = @_;
+		my $ret = &{$s_at}($at);
+		$s->warning('nonexistent job address: @' . $at)
+			if(($ret ne '') && !$ret);
+		if($ret && ($$addref ne '')) {
+			$$addref += $ret
+		} else {
+			$$addref = $ret
+		}
+		$ret
+	};
+	my $s_error = sub {
+		$self->{finished} = 1;
+		&{$s_close}();
+		return $self
+	};
+	if($beglast || $endlast) {
+		return &{$s_error}() unless(&{$s_last}());
+		$self->{beg} = $beg += $last if($beglast);
+		$self->{end} = $end += $last if($endlast)
 	}
-	if($begsub) {
-		$beg += $last;
-		$beg = 1 if($beg <= 0)
+	if($atbeg ne '') {
+		return &{$s_error}() unless(&{$s_add}($atbeg, \$beg));
+		$self->{atbeg} = '';
+		$self->{beg} = $beg
 	}
-	if($endsub) {
-		$end += $last;
-		$end = 1 if($end <= 0)
+	if($atend ne '') {
+		return &{$s_error}() unless(&{$s_add}($atend, \$end));
+		$self->{atend} = '';
+		$self->{end} = $end
 	}
-	($beg, $end)
+	if(($beg <= 0) || (($end ne '') && ($end <= 0))) {
+		$s->warning('job number out of range: ' . $a);
+		$self->{beg} = 1 if($beg <= 0);
+		return &{$s_error}() if(($end ne '') && ($end <= 0))
+	}
+	&{$s_close}();
+	$self
+}
+
+# Iterator method to check whether a current value is available.
+
+sub unfinished {
+	my $self = shift();
+	return '' if($self->{finished});
+	my $ret;
+	my $sep = $self->{sep};
+	if($sep eq '') {
+		$ret = 1
+	} elsif($sep eq '_') {
+		$ret = ($self->{atbeg} <= $self->{atend})
+	} else {
+		my $end = $self->{end};
+		$ret = (($end eq '') || ($self->{beg} <= $end))
+	}
+	$self->{finished} = !$ret;
+	$ret
+}
+
+# Iterator method to increase the current value in a range.
+# Also single values are considered as ranges.
+# When the end is reached, the method current can no longer be used.
+
+sub increase {
+	my $self = shift();
+	return $self if($self->{finished});
+	my $sep = $self->{sep};
+	if($sep eq '') {
+		$self->{finished} = 1
+	} elsif($sep eq '_') {
+		++($self->{atbeg})
+	} else {
+		++($self->{beg})
+	}
+	$self
+}
+
+# Iterator method to return the current value,
+# with true argument in a human-readable form, otherwise appropriate for
+# passage to schedule-server.
+# This method requires that the unfinished method returns true.
+
+sub current {
+	my $self = shift();
+	return undef if($self->{finished});
+	my $atbeg = $self->{atbeg};
+	my $beg = $self->{beg};
+	if($atbeg eq '') {
+		return $beg unless(($_[0] // '') && ($self->{sep} eq '') &&
+			($atbeg eq '') && ($beg =~ m{^u}));
+		my ($here, $all) = ('/' . $self->{atend}, $self->{end});
+		return (($here eq $all) ? $here : $here . ' (' . $all . ')')
+	}
+	$atbeg = '@' . $atbeg;
+	return $atbeg unless($beg);
+	$beg = '+' . $beg if($beg > 0);
+	$atbeg . $beg
+}
+
+# Iterator method to output the error that a job is unavailable.
+# Do not output (and return '' if it is the "normal" end of an open-ended
+# range ("x:"); otherwise return true.
+# The actual output is omitted if the true argument is passed.
+# If no argument is passed, $s->quit() is used.
+
+sub cond_error {
+	my $self = shift();
+	my $sep = $self->{sep};
+	return '' if(($sep eq ':') && ($self->{end} eq ''));
+	$s->error('unavailable job ' . $self->current(1))
+		unless($_[0] // $s->quiet());
+	1
 }
 
 # increase exitstatus to argument
@@ -1075,27 +1430,13 @@ sub set_exitstatus {
 	$exitstatus = $stat if($exitstatus < $stat)
 }
 
-# like join(' ', @_), but shell-quote arguments
-
-sub join_quoted {
-	my @r;
-	for my $i (@_) {
-		my $a = $i;
-		$a =~ s{\'}{\'\\\'\'}g;
-		$a = "'$a'";
-		$a =~ s{(\A|[^\\])\'([\w\-\,\.\:\/]*)\'}{$1$2}gm;
-		push(@r, ($a ne '') ? $a : "''")
-	}
-	join(' ', @r)
-}
-
 sub check_file {
 	my $default = $s->default_filename();
 	my $file = $s->file();
 	return 1 if(-S $file);
 	$s->error("no socket $file exists", 'maybe you should run first: ' .
-		&join_quoted('schedule-server',
-			($default ? '-l' : ('-f', $file))) . ' &');
+		&join_quoted('schedule-server', '--daemon',
+			($default ? '-l' : ('-f', $file))));
 	exit(7)
 }
 
@@ -1171,7 +1512,7 @@ $s->get_options(
 	'job|j=i', \$destjob,
 	'ok|o=s', \@ok,
 	'finished|x=s', \@finished,
-	'started|s=s', \@started,
+	'started|s=s', \@started
 );
 
 # Postprocess options:
@@ -1200,17 +1541,20 @@ if($action =~ m{^sto}i) {
 } elsif($action =~ m{^w}i) {
 	$ret = &cmd_run('wait')
 } elsif($action =~ m{^l}i) {
-	$ret = &cmd_list()
+	$ret = &cmd_list('list')
 } elsif($action =~ m{^stat}i) {
-	$s->quiet($s->quiet() + 1);
-	$ret = &cmd_list()
+	$ret = &cmd_list('status')
+} elsif($action =~ m{^a}i) {
+	$ret = &cmd_list('address')
+} elsif($action =~ m{^n}i) {
+	$ret = &cmd_list('number')
 } elsif($action =~ m{^o}i) {
 	$ret = &cmd_have(\@ok)
 } elsif($action =~ m{^f}i) {
 	$ret = &cmd_have(\@finished)
 } elsif($action =~ m{^starte}i) {
 	$ret = &cmd_have(\@started)
-} elsif($action =~ m{^(i|m|sh)}i) {
+} elsif($action =~ m{^(?:i|m|sh)}i) {
 	$ret = &cmd_insert()
 } elsif($action =~ m{q.*s|s.*q}i) {
 	$ret = &cmd_queue('start-or-queue')

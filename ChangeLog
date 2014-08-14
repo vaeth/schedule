@@ -1,5 +1,13 @@
 # ChangeLog for schedule
 
+*schedule-3.0:
+	Martin Väth <martin at mvath.de>:
+	- Support job addresses, job address ranges (also relative ones)
+	- list displays now job addresses
+	- list handles --quiet differently
+	- status does not imply --quiet
+	- new commands: address, number
+
 *schedule-2.2:
 	Martin Väth <martin at mvath.de>:
 	- Support nonpositive numbers in all job ranges; explain consequences
