@@ -21,7 +21,7 @@ use Schedule::Helpers qw(/./);
 
 use Exporter qw(import);
 
-our $VERSION = '3.0';
+our $VERSION = '3.1';
 
 sub new {
 	my ($class, $name, $ver) = @_;

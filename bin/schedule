@@ -13,7 +13,6 @@ use IO::Socket; # INET or UNIX, depending on user's choice
 #use Digest::SHA;     # needed for password protection
 #use POSIX;           # needed for --detach
 
-
 use lib '/usr/share/schedule';
 use FindBin;
 if(($FindBin::Bin // '') ne '') {
@@ -23,7 +22,7 @@ if(($FindBin::Bin // '') ne '') {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule', '3.0');
+my $s = Schedule::Connect->new('schedule', '3.1');
 
 =head1 NAME
 
@@ -137,187 +136,6 @@ This runs first B<calculate 1> and upon a succesfull finishing
 B<calculate 2> and B<calculate 3> in parallel.
 When both are succesfully finished, B<shutdown -h now> is executed.
 
-=head1 OPTIONS
-
-The default of the options is taken from the environment variable
-B<SCHEDULE_OPTS>; shell-quoting in the value is supported.
-Moreover, (unquoted) environment variable references of the form $VAR
-or ${VAR} in it are (recursively) expanded.
-
-=over 8
-
-=item B<--tcp> or B<-t>
-
-Use a tcp socket (port) for IPC with the client(s). This is the default.
-This option exists so that you can override an earlier specified
-(e.g. set in B<SCHEDULE>) option B<-l>.
-
-=item B<--local> or B<-l>
-
-Use a unix domain socket (file) for IPC with the server.
-
-=item B<--file=>I<file> or B<-f> I<file>
-
-Use I<file> as a unix domain socket filename for IPC.
-The default is B<${TMPDIR}/schedule-${USER}/server>.
-This option implies B<--local> (unless overridden later on).
-
-=item B<--port=>I<port> or B<-P> I<port>
-
-Use port number I<port>; default is B<8471>.
-This option implies B<--tcp> (unless overridden later on).
-
-=item B<--addr=>I<addr> or B<-A> I<addr>
-
-Bind to I<addr>. The default is 127.0.0.1 (localhost only).
-This option implies B<--tcp> (unless overridden later on).
-
-=item B<--timeout=>I<seconds> or B<-T> I<seconds>
-
-Time to wait in case of communication problems; the default is 10 B<seconds>.
-The value B<0> means to skip the timeout.
-
-=item B<--passfile=>I<password-file> or B<-Y> I<password-file>
-
-Read the first line from I<password-file> (without the newline)
-and use it as a password to encrypt communication between B<schedule>
-and B<schedule-server>. Both programs must use the same password for a
-succesfull communication.
-
-This option can be used accumulatively:
-The first existing I<password-file> with a nonempty first line is used.
-If no such file is found, this option is tacitly ignored.
-This is to make it safe to specify this option in B<SCHEDULE_OPTS>
-or B<SCHEDULE_OPTS> if no corresponding file exists.
-
-=item B<--password=>I<password> or B<-y> I<password>
-
-This is like B<--passfile>, with the difference that you specify the
-password directly. This option is dangerous, because many systems allow
-other users to see the commandline/environment (hence the password is visible).
-
-=item B<--job=>I<jobnr> or B<-j> I<jobnr>
-
-This describes where the job(s) should be inserted into the queue.
-The special number B<0> means the end of the queue
-(which may be the number of the last queued job or one later, depending
-on the selected action); negative numbers count from the end of the list.
-The default is B<0>.
-
-This means e.g. that B<schedule queue> will by default queue new jobs after
-the end of the queue while e.g. B<schedule insert> will shift the selected
-jobs (in their order of selection) to the end of the queue.
-
-=item B<--ok=>I<jobs> or B<-o> I<jobs>
-
-This option can be used repeatedly; all arguments are collected.
-I<jobs> can be as in the normal argument list (space-separated).
-If used with B<start-or-queue>, B<ok>, B<finished>, B<started>,
-check whether the listed jobs have been finished with zero exit status.
-
-=item B<--background> or B<--bg> or B<-b>
-
-For commands which are expected to be waiting (B<queue>, B<start-or-queue>
-if the condition for immediate start are not satisfied, B<exec>, B<run>)
-fork into background and return before the actual waiting begins.
-To use this option, your system must know fork(), of course.
-
-This is similar to using the B<&> in a shell, but in contrast to the latter,
-a sequence of such commands does not give a race condition.
-For instance, if you use B<schedule queue command1 & schedule queue command2 &>
-it is partially random whether B<command1> is indeed queued in fron of
-B<command1>.
-By using instead B<schedule --bg command1 && schedule --bg command2>
-this cannot happen.
-
-This option is ignored for B<schedule --bg parallel>, since
-B<schedule bg> has a similar effect but does not need to fork.
-
-=item B<--daemon> or B<-B>
-
-This is like B<--background>, but it also partially detaches from terminal
-and discards all subsequent standard input/output.
-
-=item B<--detach> or B<-E>
-
-This is like B<--daemon>, but fully detaches from terminal, discarding also
-error output. To use this option, your perl must have a functioning POSIX.
-To avoid unexpected issues with relatice paths, the current working directory
-is kept (and thus remains occupied). Therefore you might want to change to the
-root directory before using this option.
-
-=item B<--finished=>I<jobs> or B<-x> I<jobs>
-
-This option can be used repeatedly; all arguments are collected.
-I<jobs> can be as in the normal argument list (space-separated).
-If used with B<start-or-queue>, B<ok>, B<finished>, B<started>,
-check whether the listed jobs have been finished, independent of their
-exit status.
-
-=item B<--started=>I<jobs> or B<-s> I<jobs>
-
-This option can be used repeatedly; all arguments are collected.
-I<jobs> can be as in the normal argument list (space-separated).
-If used with B<start-or-queue>, B<ok>, B<finished>, B<started>,
-check whether the listed jobs have been started (finished jobs
-are considered as started).
-
-=item B<--no-user> or B<--nouser> or B<-u>
-
-If this option is specified, B<schedule list> will suppress the output of
-user, hostname, and B<HOSTTEXT>.
-
-=item B<--no-host> or B<--nohost> or B<-H>
-
-If this option is specified, B<schedule list> will suppress the output of
-B<HOSTTEXT>. By default, the value of B<HOSTTEXT> is output in braces;
-this can be used to indicate e.g. whether the command is scheduled from
-a chroot (and from which). If B<HOSTTEXT> is not specified, the output
-of B<uname -m> is used as a default (if nonempty).
-
-=item B<--no-dir> or B<--nodir> or B<-D>
-
-If this option is specified, B<schedule list> will suppress the output of
-the current working directory for the scheduled command.
-
-=item B<--no-command> or B<--nocommand> or B<-c>
-
-If this option is specified, B<schedule list> will suppress the output of
-the queued command.
-
-=item B<--keep-dir> or B<--keepdir> or B<-d>
-
-If this option is specified with B<queue>, B<start>, or B<start-or-queue>,
-the current working directory is not shortcut using the B<HOME>
-environment variable. This influences the later output with B<schedule list>.
-
-=item B<--exit=>I<exitstatus> or B<-e> I<exitstatus>
-
-Sets the I<exitstatus> for unscheduled jobs. The default is B<0>.
-
-=item B<--color> or B<-F>
-
-Try to color even if output is not a terminal.
-
-=item B<--no-color> or B<--nocolor> or B<-p>
-
-Do not color the output.
-Setting the environment variable B<ANSI_COLORS_DISABLED> has the same effect.
-
-=item B<--quiet> or B<-q> (accumulative)
-
-Be quiet.
-
-=item B<--help> or B<-h>
-
-Display brief help.
-
-=item B<--man> or B<-?>
-
-Display extended help as a manpage.
-
-=back
-
 =head1 COMMANDS
 
 =over 8
@@ -325,7 +143,30 @@ Display extended help as a manpage.
 =item B<queue> I<cmd> [I<args> ... I<args>]
 
 Queue I<cmd> I<args> ... I<args> for execution.
-The command will be exuted using the shell.
+The command will be executed using the shell.
+
+The following environment variables are used for later output with
+B<schedule list>:
+
+=over 16
+
+=item B<HOSTNAME>
+
+If defined, this is used instead of the host name.
+
+=item B<HOSTTEXT>
+
+If B<HOSTTEXT> is nonempty, B<schedule list> will output it
+in braces after the host name (unless B<--no-host> is used).
+This can be used to distinguish e.g. different chroots on the same host.
+If this variable is undefined, the output of B<uname -m> is used.
+
+=item B<HOME>
+
+Unless you specify B<--keep-dir>, this is used to shortcut the path of the
+current directory.
+
+=back
 
 =item B<start> I<cmd> [I<args> ... I<args>]
 
@@ -445,13 +286,15 @@ B<--ok>, B<--finished>, B<--started> meet the corresponding requirements.
 B<--ok>, B<--finished>, or B<--started> options with these arguments,
 respectively.)
 If none of these options is specified and no I<jobs> argument is given,
-acts as if the argument B<:> is given for I<jobs>.
+the command acts as if the argument B<:> is given for I<jobs>.
 If the exit status is nonzero, it is the maximum of B<1> and of all exit values
 of jobs specified through B<--ok>.
 
 =item B<remove> I<jobs>
 
-Remove I<jobs> from the list of B<queued> jobs.
+Remove I<jobs> from the list of B<queued> jobs and let them exit (with the
+exit status specified by B<--exit> if that value is nonzero).
+
 Note that if the job is already started it is not stopped, but its exit status
 cannot be queried through B<schedule> anymore.
 
@@ -467,17 +310,212 @@ first two jobs one command before the end of the list.
 
 =item B<cancel> I<jobs>
 
-If I<jobs> are not yet started they will never be started.
-If they are running, their exit status will be ignored.
-The scheduler is forced to assume that the jobs finished with the
-exitstatus specified by B<--cancel> (default is B<0>).
+All of the I<jobs> which are not yet started, they will exit
+(with the value specified by B<--exit> if that value is nonzero).
 
-=item B<address> I<jobs>
+After this command, the scheduler behaves as if I<jobs> have finished
+with the value specified by B<--exit> (or B<0> if that option
+is not given).
 
-This outputs the job addresses of the specified I<jobs>
-(each output followed by a newline).
+It is explicitly admissible to "cancel" finished jobs: As concerns B<schedule>,
+this will change their exit status. For instance, if job 1 has failed, then
+B<schedule cancel 1> will set its exit status to B<0> so that a subsequent
+B<schedule exec> will "ignore" this job.
 
 =back
+
+=head1 OPTIONS
+
+The default of the options is taken from the environment variable
+B<SCHEDULE_OPTS>; shell-quoting in the value is supported.
+Moreover, (unquoted) environment variable references of the form $VAR
+or ${VAR} in it are (recursively) expanded.
+
+=over 8
+
+=item B<--tcp> or B<-t>
+
+Use a tcp socket (port) for IPC with the client(s). This is the default.
+This option exists so that you can override an earlier specified
+(e.g. set in B<SCHEDULE>) option B<-l>.
+
+=item B<--local> or B<-l>
+
+Use a unix domain socket (file) for IPC with the server.
+
+=item B<--file=>I<file> or B<-f> I<file>
+
+Use I<file> as a unix domain socket filename for IPC.
+The default is B<${TMPDIR}/schedule-${USER}/server>.
+This option implies B<--local> (unless overridden later on).
+
+=item B<--port=>I<port> or B<-P> I<port>
+
+Use port number I<port>; default is B<8471>.
+This option implies B<--tcp> (unless overridden later on).
+
+=item B<--addr=>I<addr> or B<-A> I<addr>
+
+Bind to I<addr>. The default is 127.0.0.1 (localhost only).
+This option implies B<--tcp> (unless overridden later on).
+
+=item B<--timeout=>I<seconds> or B<-T> I<seconds>
+
+Time to wait in case of communication problems; the default is 10 B<seconds>.
+The value B<0> means to skip the timeout.
+
+=item B<--passfile=>I<passfile> or B<-Y> I<passfile>
+
+Read the first line from I<passfile> (without the newline)
+and use it as a password to encrypt communication between B<schedule>
+and B<schedule-server>. Both programs must use the same password for a
+succesfull communication.
+
+This option can be used accumulatively:
+The first existing I<password-file> with a nonempty first line is used.
+If no such file is found, this option is tacitly ignored.
+This is to make it safe to specify this option in B<SCHEDULE_OPTS>
+or B<SCHEDULE_OPTS> if no corresponding file exists.
+
+=item B<--password=>I<password> or B<-y> I<password>
+
+This is like B<--passfile>, with the difference that you specify the
+password directly. This option is dangerous, because many systems allow
+other users to see the commandline/environment (hence the password is visible).
+
+=item B<--job=>I<jobnr> or B<-j> I<jobnr>
+
+This describes where the job(s) should be inserted into the queue.
+The special number B<0> means the end of the queue
+(which may be the number of the last queued job or one later, depending
+on the selected action); negative numbers count from the end of the list.
+The default is B<0>.
+
+This means e.g. that B<schedule queue> will by default queue new jobs after
+the end of the queue while e.g. B<schedule insert> will shift the selected
+jobs (in their order of selection) to the end of the queue.
+
+=item B<--ok=>I<jobs> or B<-o> I<jobs>
+
+This option can be used repeatedly; all arguments are collected.
+I<jobs> can be as in the normal argument list (space-separated).
+If used with B<start-or-queue>, B<ok>, B<finished>, B<started>,
+check whether the listed jobs have been finished with zero exit status.
+
+=item B<--background> or B<--bg> or B<-b>
+
+For commands which are expected to be waiting (B<queue>, B<start-or-queue>
+if the condition for immediate start are not satisfied, B<exec>, B<run>)
+fork into background and return before the actual waiting begins.
+To use this option, your system must know fork(), of course.
+
+This is similar to using the B<&> in a shell, but in contrast to the latter,
+a sequence of such commands does not give a race condition.
+For instance, if you use B<schedule queue command1 & schedule queue command2 &>
+it is partially random whether B<command1> is indeed queued in fron of
+B<command1>.
+By using instead B<schedule --bg command1 && schedule --bg command2>
+this cannot happen.
+
+This option is ignored for B<schedule --bg parallel>, since
+B<schedule bg> has a similar effect but does not need to fork.
+
+=item B<--daemon> or B<-B>
+
+This is like B<--background>, but it also partially detaches from terminal
+and discards all subsequent standard input/output.
+
+=item B<--detach> or B<-E>
+
+This is like B<--daemon>, but fully detaches from terminal, discarding also
+error output. To use this option, your perl must have a functioning POSIX.
+To avoid unexpected issues with relatice paths, the current working directory
+is kept (and thus remains occupied). Therefore you might want to change to the
+root directory before using this option.
+
+=item B<--finished=>I<jobs> or B<-x> I<jobs>
+
+This option can be used repeatedly; all arguments are collected.
+I<jobs> can be as in the normal argument list (space-separated).
+If used with B<start-or-queue>, B<ok>, B<finished>, B<started>,
+check whether the listed jobs have been finished, independent of their
+exit status.
+
+=item B<--started=>I<jobs> or B<-s> I<jobs>
+
+This option can be used repeatedly; all arguments are collected.
+I<jobs> can be as in the normal argument list (space-separated).
+If used with B<start-or-queue>, B<ok>, B<finished>, B<started>,
+check whether the listed jobs have been started (finished jobs
+are considered as started).
+
+=item B<--no-user> or B<--nouser> or B<-u>
+
+If this option is specified, B<schedule list> will suppress the output of
+user, hostname, and B<HOSTTEXT>.
+
+=item B<--no-host> or B<--nohost> or B<-H>
+
+If this option is specified, B<schedule list> will suppress the output of
+B<HOSTTEXT>.
+
+=item B<--no-dir> or B<--nodir> or B<-D>
+
+If this option is specified, B<schedule list> will suppress the output of
+the current working directory for the scheduled command.
+
+=item B<--no-command> or B<--nocommand> or B<-c>
+
+If this option is specified, B<schedule list> will suppress the output of
+the queued command.
+
+=item B<--keep-dir> or B<--keepdir> or B<-d>
+
+If this option is specified with B<queue>, B<start>, or B<start-or-queue>,
+the current working directory is not shortcut using the B<HOME>
+environment variable. This influences the later output with B<schedule list>.
+
+=item B<--exit=>I<exitstatus> or B<-e> I<exitstatus>
+
+For B<queue>, B<start>, or B<start-or-queue>: If the command is canceled by
+one of the signals B<INT>, B<HUP>, or B<TERM>, then the command exits with
+I<exitstatus> and also I<exitstatus> appears as exit status in the queue.
+If the command if canceled indirectly by B<schedule cancel> or
+B<schedule remove>, I<exitstatus> is the exit status
+(with the execption described in the next sentence).
+
+For B<cancel> or B<remove>: If I<exitstatus> is nonzero,
+then I<exitstatus> is the exit status of the canceled/removed commands.
+
+B<cancel> always sets the I<exitstatus> of the canceled job(s) in the queue
+(independently of whether I<exitstatus> is zero or not).
+
+The default value of I<exitstatus> is B<0>.
+
+=item B<--color> or B<-F>
+
+Try to color even if output is not a terminal.
+
+=item B<--no-color> or B<--nocolor> or B<-p>
+
+Do not color the output.
+Setting the environment variable B<ANSI_COLORS_DISABLED> has the same effect.
+
+=item B<--quiet> or B<-q> (accumulative)
+
+Be quiet.
+
+=item B<--help> or B<-h>
+
+Display brief help.
+
+=item B<--man> or B<-?>
+
+Display extended help as a manpage.
+
+=back
+
+
 
 =head1 SPECIFYING JOBS
 
@@ -661,7 +699,8 @@ to might change.
 =head1 COPYRIGHT AND LICENSE
 
 Copyright Martin VE<auml>th.
-This program is under a BSD type License.
+This project is under a BSD type license which means that you can do
+practically anything with it except removing my name.
 
 =head1 AUTHOR
 
@@ -695,13 +734,13 @@ my %known_ats = ();
 #
 
 sub cmd_stop_server {
-	return '' unless(&openclient() && &client_send("stop\n$cancel"));
+	return '' unless(&openclient() && &client_send("stop\c@$cancel"));
 	&client_recv(my $fail);
-	unless($s->quiet()) {
-		chomp($fail);
-		$s->error("jobs failed to close: $fail") if($fail ne '')
-	}
 	&closeclient();
+	my @fail = split("\c@", $fail);
+	shift(@fail);
+	$s->error('jobs failed to close: ' . join(' ', @fail))
+		if(scalar(@fail) && !($s->quiet()));
 	1
 }
 
@@ -731,13 +770,12 @@ sub cmd_queue {
 	}
 	return '' unless(&openclient());
 	&signals();
-	my $cmd = '[' .  &my_user() . '@' . &my_hostname() .
-		'(' . &my_hosttext() . ')' .
-		&my_cwd() . ']' . &join_quoted(@ARGV);
-	my $success = &client_send("$runmode\n$destjob\n$cmd");
+	my $cmd = join("\c@", &my_user(), &my_hostname(),
+		&my_hosttext(), &my_cwd(), @ARGV);
+	my $success = &client_send("$runmode\c@$destjob\c@$cmd");
 	$success = '' unless(&client_recv($unique));
 	if($have) {
-		$unique =~ m{^([^\n]*)\n(.*)};
+		$unique =~ m{^([^\c@]*)\c@(.*)};
 		$runmode = $1;
 		$unique = $2
 	}
@@ -775,7 +813,7 @@ sub cmd_run {
 	return '' unless(&static_argv());
 	my $send = $runmode;
 	$send = 'run' if($runmode eq 'exec');
-	$send .= "\n";
+	$send .= "\c@";
 	$s->forking();
 	for my $a (@ARGV) {
 		for(my $iter = &start_end($a, undef, 1);
@@ -805,7 +843,7 @@ sub cmd_parallel {
 	for my $a (@ARGV) {
 		for(my $iter = &start_end($a, \$last);
 			$iter->unfinished(); $iter->increase()) {
-			return '' unless(&runner("bg\n" . $iter->current(),
+			return '' unless(&runner("bg\c@" . $iter->current(),
 				my $job, my $stat));
 			if($job eq '0') {
 				last unless($iter->cond_error());
@@ -824,7 +862,7 @@ sub cmd_parallel {
 	return '' unless(&closeclient());
 	return 1 unless($waiting);
 	for my $id (keys(%unique_ids)) {
-		return '' unless(&runner("wait\n$id", my $job, my $stat, 1));
+		return '' unless(&runner("wait\c@$id", my $job, my $stat, 1));
 		&set_exitstatus($stat) if(($job ne '0') && $stat)
 	}
 	1
@@ -847,7 +885,7 @@ sub cmd_list {
 	my $is_open = '';
 	my $send = $type;
 	$send = 'status' if($type ne 'list');
-	$send .= "\n";
+	$send .= "\c@";
 	for my $a (@ARGV) {
 		for(my $iter = &start_end($a, \$last, \$is_open);
 			$iter->unfinished(); $iter->increase()) {
@@ -856,7 +894,7 @@ sub cmd_list {
 			my $reply;
 			return '' unless(&client_send($send . $iter->current()) &&
 				&client_recv($reply) &&
-				($reply =~ s{^(\d+)\n?}{}));
+				($reply =~ s{^(\d+)\c@?}{}));
 			my $job = $1;
 			my ($addr, $stat, $found);
 			my $quiet = ($s->quiet());
@@ -873,12 +911,12 @@ sub cmd_list {
 				}
 			} else {
 				$found = 1;
-				$reply =~ s{^([^\n]*)\n?}{};
+				$reply =~ s{^([^\c@]*)\c@?}{};
 				$addr = ($1 // '');
 				if($type ne 'list') {
 					$stat = $reply
 				} else {
-					$reply =~ s{^([^\n]*)\n?}{};
+					$reply =~ s{^([^\c@]*)\c@?}{};
 					$stat = ($1 // '')
 				}
 				if($quiet) {
@@ -943,11 +981,6 @@ sub cmd_list {
 				}
 				next
 			}
-			if($reply =~ s{\[([^@]*)@([^\(]*)\(([^\)]*)\)([^\]]*)\]}{}) {
-				$reply = &format_cmd($use_color, $1, $2, $3, $4, $reply)
-			} elsif($nocommand) {
-				$reply = ''
-			}
 			my $jobspace = ((length($job) < 3) ?
 				(' ' x (3 - length($job))) : '');
 			my $addrspace = ((length($addr) < 4) ?
@@ -956,10 +989,12 @@ sub cmd_list {
 				print($jobspace, $col_job, $job, $reset,
 				$addrspace, $col_addr, $addr, $reset,
 				$statspace, $col_meta, '(', $stat,
-				$col_meta, ')', $reset, $reply, "\n")
+				$col_meta, ')', $reset,
+				&format_cmd(1, $reply), "\n")
 			} else {
 				print($jobspace, $job, $addrspace, $addr,
-				$statspace, '(', $stat, ')', $reply, "\n")
+				$statspace, '(', $stat, ')',
+				&format_cmd('', $reply), "\n")
 			}
 		}
 	}
@@ -973,8 +1008,10 @@ sub cmd_list {
 	my $col_host;
 	my $col_dir = undef;
 sub format_cmd {
-	my ($use_color, $user, $host, $hosttext, $dir, $cmd) = @_;
-	$cmd = ($nocommand ? '' : ' ' . $cmd);
+	my ($use_color, $data) = @_;
+	my ($user, $host, $hosttext, $dir, @cmd) = split("\c@", $data);
+	return ($nocommand ? '' : $data) unless(defined($dir));
+	my $cmd = (($nocommand || !@cmd) ? '' : ' ' . &join_quoted(@cmd));
 	my $nopwd = ($nodir || ($dir eq ''));
 	return $cmd if($nouser && $nopwd);
 	if($use_color) {
@@ -1008,18 +1045,21 @@ sub cmd_cancel {
 			return '' unless($is_open || &openclient());
 			$is_open = 1;
 			my $reply;
-			return '' unless(&client_send("cancel\n$cancel\n",
+			return '' unless(&client_send("cancel\c@$cancel\c@" .
 				$iter->current()) && &client_recv($reply));
-			my ($job, $stat) = split(qr{\s+}, $reply);
+			$reply =~ s{^([^\c@]*)\c@?}{};
+			my $job = $1;
 			if($job eq '0') {
 				last unless($iter->cond_error());
 				&set_exitstatus(1);
 				next
 			}
-			if($stat) {
-				&set_exitstatus(1);
-				$s->error("job $job failed to close")
-			}
+			next unless($reply);
+			&set_exitstatus(1);
+			next if($s->quiet());
+			my $jobtext = $iter->current(1);
+			$jobtext .= (' (' . $job . ')') if($job ne $jobtext);
+			$s->error("job $jobtext failed to close")
 		}
 	}
 	return 1 unless($is_open);
@@ -1029,19 +1069,20 @@ sub cmd_cancel {
 sub cmd_remove {
 	&validate_jobs();
 	return '' unless(&openclient() &&
-		&client_send("remove\n$cancel\n" . join(' ', @ARGV)) &&
-		&client_recv(my $failed));
-	my @fail = split(qr{\s+}, $failed);
+		&client_send("remove\c@$cancel\c@" . join(' ', @ARGV)) &&
+		&client_recv(my $fail));
+	my @fail = split("\c@", $fail);
+	shift(@fail);
 	if(@fail) {
 		&set_exitstatus(1);
-		$s->error('jobs failed to close: ' . join(' ',@fail))
+		$s->error('jobs failed to close: ' . join(' ', @fail))
 	}
 	1
 }
 
 sub cmd_insert {
 	&validate_jobs();
-	&openclient() && &client_send("insert\n$destjob\n" . join(' ', @ARGV))
+	&openclient() && &client_send("insert\c@$destjob\c@" . join(' ', @ARGV))
 }
 
 #
@@ -1070,8 +1111,8 @@ sub openclient {
 	my $ver;
 	if(&client_send('version') && &client_recv($ver) &&
 		&is_nonempty($ver)) {
-		unless($ver eq $s->version()) {
-			$s->error('schedule-server ' . $ver .
+		unless($ver eq ('schedule-server ' . $s->version())) {
+			$s->error($ver .
 				' does not match schedule ' . $s->version());
 			return ''
 		}
@@ -1109,7 +1150,7 @@ sub runner {
 	my $reply;
 	my $ret = (&client_send($send) &&
 		&client_recv($reply) &&
-		($reply =~ m{^([^\n]*)\n?(\d*)\n?}));
+		($reply =~ m{^([^\c@]*)\c@?(\d*)\c@?}));
 	$_[0] = my $num = $1;
 	my $stat = $2;
 	unless($nowait || ($num eq '0') || &is_nonnegative($stat)) {
@@ -1140,7 +1181,7 @@ sub static_argv {
 					return '' unless($is_open || &openclient());
 					$have_static = $is_open = 1
 				}
-				return '' unless(&client_send("unique\n$i") &&
+				return '' unless(&client_send("unique\c@$i") &&
 					&client_recv($result));
 				$know{$i} = $result
 			}
@@ -1149,7 +1190,7 @@ sub static_argv {
 				&set_exitstatus(1);
 				next
 			}
-			push(@new, $result . "\n" . $i . "\n" . $a)
+			push(@new, $result . "\c@" . $i . "\c@" . $a)
 		}
 	}
 	return ((!$is_open) || &closeclient()) unless($have_static);
@@ -1158,8 +1199,8 @@ sub static_argv {
 }
 
 sub send_status {
-	# Sending exitstatus must cause no errors/warnings:
-	&client_send("end\n$unique\n$exitstatus") if(&openclient(1));
+	# Sending exitstatus must not cause errors/warnings:
+	&client_send("end\c@$unique\c@$exitstatus") if(&openclient(1));
 	&closeclient(1);
 	1
 }
@@ -1171,7 +1212,7 @@ sub cancel_job {
 	&closeclient(1);
 	#&send_status($cancel);
 	&openclient(1) &&
-		&client_send("cancel\n$cancel\n" . ($unique // $destjob)) &&
+		&client_send("cancel\c@$cancel\c@" . ($unique // $destjob)) &&
 		&client_recv(my $reply) &&
 		&client_send('close');
 	exit($cancel)
@@ -1216,7 +1257,7 @@ sub nonempty_have {
 sub have_args {
 	my $ret = '';
 	for my $a (\@ok, \@finished, \@started) {
-		$ret .= "\n" . join(' ', @$a)
+		$ret .= "\c@" . join(' ', @$a)
 	}
 	$ret
 }
@@ -1244,7 +1285,7 @@ sub start_end {
 	};
 	if($a =~ m{^u}) {
 		$self->{atbeg} = '';
-		($self->{beg}, $self->{atend}, $self->{end}) = split(m{\n}, $a);
+		($self->{beg}, $self->{atend}, $self->{end}) = split(m{\c@}, $a);
 		return $self
 	}
 	my ($atbeg, $beg, $sep, $atend, $end) = $s->decode_range($a);
@@ -1290,7 +1331,7 @@ sub start_end {
 		$last = ((ref($lastref) eq '') ? $lastref : $$lastref);
 		return 1 if(&is_nonnegative($last));
 		return '' unless(&{$s_open}());
-		&client_send("status\n0") &&
+		&client_send("status\c@0") &&
 			&client_recv($last) &&
 			($last //= '') &&
 			($last =~ s{^(\d+).*}{$1});
@@ -1302,9 +1343,8 @@ sub start_end {
 		my $ret = $known_ats{$at};
 		return $ret if(defined($ret));
 		return '' unless(&{$s_open}());
-		return '' unless(&client_send("status\n\@$at") &&
+		return '' unless(&client_send("status\c@\@$at") &&
 			&client_recv($ret) &&
-			defined($ret) &&
 			$ret =~ m{^(\d+)});
 		$known_ats{$at} = $1;
 	};
@@ -1450,24 +1490,23 @@ sub my_hostname {
 			File::Which->import();
 			$hostname = hostname()
 		};
-		$hostname = '' unless($@ && defined($hostname))
+		$hostname = '' unless($@ && defined($hostname));
+		$hostname =~ s{\c@.*$}{}
 	}
-	$hostname =~ s{[\(\)\[\]\:]}{.}g;
 	$hostname
 }}
 
 { my $hosttext = undef; # a static closure
 sub my_hosttext {
+	$hosttext //= $ENV{'HOSTTEXT'};
 	return $hosttext if(defined($hosttext));
-	$hosttext = $ENV{'HOSTTEXT'};
-	unless(defined($hosttext)) {
-		my $olderr = undef;
-		$olderr = undef unless(open($olderr, '>&', \*STDERR) && open(STDERR, '>', $devnull));
-		$hosttext = (`uname -m` // '');
-		open(STDERR, '>&', $olderr) if(defined($olderr));
-		chomp($hosttext)
-	}
-	$hosttext =~ s{[\(\)\[\]]}{.}g;
+	my $olderr = undef;
+	$olderr = undef unless(open($olderr, '>&', \*STDERR)
+		&& open(STDERR, '>', $devnull));
+	$hosttext = (`uname -m` // '');
+	open(STDERR, '>&', $olderr) if(defined($olderr));
+	chomp($hosttext);
+	$hosttext =~ s{\c@.*$}{};
 	$hosttext
 }}
 
@@ -1476,19 +1515,16 @@ sub my_cwd {
 	return $cwd if(defined($cwd));
 	$cwd = (getcwd() // '');
 	unless($keepdir) {
-		my $home = $ENV{'HOME'};
+		my $home = ($ENV{'HOME'} // (getpwuid($<))[7]);
 		if(&is_nonempty($home)) {
 			if($home eq $cwd) {
 				$cwd = '~'
 			} else {
-				my $len = length($home);
-				$cwd = '~' . substr($cwd, $len) if(
-				($len < length($cwd)) &&
-				(substr($cwd, 0, $len + 1) eq ($home . '/')))
+				$cwd =~ s{^\Q$home\E\/}{\~\/}o
 			}
 		}
 	}
-	$cwd =~ s{[\[\]]}{?}g;
+	$cwd =~ s{\c@.*$}{};
 	$cwd
 }}
 

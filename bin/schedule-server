@@ -22,7 +22,7 @@ if(($FindBin::Bin // '') ne '') {
 }
 use Schedule::Helpers qw(/./);
 use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule-server', '3.0');
+my $s = Schedule::Connect->new('schedule-server', '3.1');
 
 =head1 NAME
 
@@ -256,7 +256,8 @@ Display extended help as a manpage.
 =head1 COPYRIGHT AND LICENSE
 
 Copyright Martin VE<auml>th.
-This program is under a BSD type License.
+This project is under a BSD type license which means that you can do
+practically anything with it except removing my name.
 
 =head1 AUTHOR
 
@@ -285,7 +286,7 @@ my $socket = undef;
 
 # Constant variables:
 
-my $have_re = qr{([^\n]*)\n([^\n]*)\n([^\n]*)\n?};
+my $have_re = qr{([^\c@]*)\c@([^\c@]*)\c@([^\c@]*)\c@?};
 
 #
 # Functions
@@ -344,7 +345,7 @@ sub serverloop {
 			next
 		}
 		$will_close = 1;
-		$data =~ s{^([^\n]*)\n?}{};
+		$data =~ s{^([^\c@]*)\c@?}{};
 		$cmd = ($1 // '');
 		if($cmd eq 'have') {
 			&loop_have()
@@ -379,7 +380,7 @@ sub serverloop {
 }
 
 sub loop_version {
-	$s->conn_send($conn, $s->version())
+	$s->conn_send($conn, 'schedule-server ' . $s->version())
 }
 
 sub loop_queue {
@@ -387,11 +388,11 @@ sub loop_queue {
 	if($cmd eq 'start-or-queue') {
 		$data =~ s{$have_re}{};
 		$cmd = (&have_jobs($1, $2, $3) ? 'queue' : 'start');
-		$send = $cmd . "\n"
+		$send = $cmd . "\c@"
 	} else {
 		$send = ''
 	}
-	$data =~ s{^([^\n]*)\n}{};
+	$data =~ s{^([^\c@]*)\c@}{};
 	my $index = &my_index($1, 1);
 	$index = scalar(@$joblist) unless(&is_nonnegative($index));
 	my $stat = (($cmd eq 'start') ? '' : undef);
@@ -410,7 +411,7 @@ sub loop_run {
 	}
 	my $job = $joblist->[$i];
 	my $stat = &loop_bgjob($job, ($cmd eq 'wait'));
-	$s->conn_send($conn, $reply . "\n" . ($stat // '') . "\n");
+	$s->conn_send($conn, $reply . "\c@" . ($stat // '') . "\c@");
 	return 1 if(&is_nonnegative($stat));
 	&push_wait($job, $conn);
 	$will_close = ''
@@ -422,7 +423,7 @@ sub loop_bg {
 	if($reply ne '0') {
 		my $job = $joblist->[$index];
 		$reply = &form_unique(&get_unique($job));
-		$reply .= "\n" . &loop_bgjob($job) . "\n" if($cmd eq 'bg')
+		$reply .= "\c@" . &loop_bgjob($job) . "\c@" if($cmd eq 'bg')
 	}
 	$s->conn_send($conn, $reply)
 }
@@ -437,7 +438,7 @@ sub loop_bgjob {
 }
 
 sub loop_end() {
-	$data =~ s{^([^\n]*)\n?}{};
+	$data =~ s{^([^\c@]*)\c@?}{};
 	return unless(defined(my $j = &job_from_unique($1)));
 	&send_finish($j, $data);
 	my $stat = &get_status($j);
@@ -445,13 +446,13 @@ sub loop_end() {
 }
 
 sub loop_cancel() {
-	$data =~ s{^(\d+)\n}{};
+	$data =~ s{^(\d+)\c@?}{};
 	my $stat = ($1 // 0);
 	my $index = &my_index($data);
 	my $reply = &indexname($index);
 	if($reply ne '0') {
 		my $job = $joblist->[$index];
-		$reply .= "\n-" unless(&send_remove($job, $stat));
+		$reply .= "\c@-" unless(&send_remove($job, $stat));
 		&send_finish($job, $stat);
 		&set_status($job, $stat)
 	}
@@ -463,9 +464,9 @@ sub loop_list() {
 	my $reply = &indexname($i);
 	if($reply ne '0') {
 		my $job = $joblist->[$i];
-		$reply .= "\n\@" . &get_unique($job);
-		$reply .= "\n" . (&get_status($job) // '-');
-		$reply .= "\n" . &get_cmd($job) if($cmd eq 'list')
+		$reply .= "\c@\@" . &get_unique($job);
+		$reply .= "\c@" . (&get_status($job) // '-');
+		$reply .= "\c@" . &get_cmd($job) if($cmd eq 'list')
 	}
 	$s->conn_send($conn, $reply)
 }
@@ -476,7 +477,7 @@ sub loop_have() {
 }
 
 sub loop_insert() {
-	$data =~ s{([^\n]*)\n}{};
+	$data =~ s{([^\c@]*)\c@?}{};
 	my $index = &my_index($1, 1);
 	return unless(defined($index));
 	my @insert = ();
@@ -498,7 +499,7 @@ sub loop_insert() {
 }
 
 sub loop_remove() {
-	$data =~ s{^(\d+)\n}{};
+	$data =~ s{^(\d+)\c@?}{};
 	my $stat = ($1 // 0);
 	my @fail = ();
 	for my $i (&unique_indices($data)) {
@@ -513,14 +514,14 @@ sub loop_remove() {
 		my $j = $oldlist->[$i];
 		push(@$joblist, $j) if(defined($j))
 	}
-	$s->conn_send($conn, join(' ', @fail) . "\n")
+	$s->conn_send($conn, join("\c@", '', @fail))
 }
 
 sub loop_stop() {
 	$data =~ m{^(\d+)};
 	my $stat = ($1 // 0);
 	my @fail = &send_exit($stat);
-	my $ret = $s->conn_send($conn, join(' ', @fail) . "\n");
+	my $ret = $s->conn_send($conn, join("\c@", '', @fail));
 	$ret = '' if(@fail);
 	$conn->close() && $ret
 }

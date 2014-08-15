@@ -24,7 +24,7 @@ our @EXPORT_OK = qw(
 	join_quoted
 	env_to_array
 );
-our $VERSION = '3.0';
+our $VERSION = '3.1';
 
 sub signals {
 	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = ((@_) ? $_[0] : sub {1})
@@ -35,7 +35,6 @@ sub my_user {
 	return $user if(defined($user));
 	my $user = getpwuid($<);
 	$user = $< unless(&is_nonempty($user));
-	$user =~ s{\W}{}g;
 	$user
 }}
 

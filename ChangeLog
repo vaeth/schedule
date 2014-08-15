@@ -1,5 +1,13 @@
 # ChangeLog for schedule
 
+*schedule-3.1:
+	Martin Väth <martin at mvath.de>:
+	- Protocoll cleanup (\0 separators), making data sanitizing superfluous
+	- minor code cleanup
+	- man: document HOSTNAME etc
+	- man: document --exit and cancel in more detail
+	- man: rearrangements and cosmetical improvements
+
 *schedule-3.0:
 	Martin Väth <martin at mvath.de>:
 	- Support job addresses, job address ranges (also relative ones)
@@ -119,4 +127,4 @@
 
 *schedule-0.1:
 	Martin Väth <martin at mvath.de>:
-	- Rebuild from scratch, based on https://github.com/vaeth/starter/
+	- Start from scratch, motivated by https://github.com/vaeth/starter/
