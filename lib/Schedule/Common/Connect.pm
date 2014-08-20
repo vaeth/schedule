@@ -1,32 +1,29 @@
-# Schedule::Connect.pm
+# Schedule::Common::Connect.pm
 #
 # Copyright Martin Väth <martin@mvath.de>.
-# This is part of the schedule project and under a BSD type license.
+# This is part of the schedule project.
 
-package Schedule::Connect;
-use File::Spec;
-#use Term::ANSIColor; # not mandatory but recommended: fallback to no color
-#use Crypt::Rijndael; # needed for password protection
-#use Digest::SHA;     # needed for password protection
-#use POSIX;           # needed for --detach
+package Schedule::Common::Connect;
 
 use strict;
 use warnings;
 use integer;
+use Getopt::Long ();
+use File::Spec ();
+use IO::Select ();
+#use Crypt::Rijndael (); # needed for password protection
+#use Digest::SHA ();     # needed for password protection
+#use POSIX (); # needed for --detach
+#use Pod::Usage (); # optional, but no manpage or help without this
 
-use Getopt::Long;
-use Pod::Usage;
+use Schedule::Common::Helpers qw(:COLOR :IS :SYSQUERY);
 
-use Schedule::Helpers qw(/./);
-
-use Exporter qw(import);
-
-our $VERSION = '3.1';
+our $VERSION = '4.0';
 
 sub new {
 	my ($class, $name, $ver) = @_;
 	$0 = $name;
-	my $s = bless {
+	my $s = bless({
 		name => $name,
 		daemon => undef,
 		tcp => 1,
@@ -41,12 +38,9 @@ sub new {
 		color_stderr => undef,
 		color_force => undef,
 		quiet => '0'
-	}, $class;
-	$s->fatal("$name version $ver differs from Schedule::Connect version $VERSION")
-		if(defined($ver) && ($ver ne $VERSION));
-	my $helpers = Schedule::Helpers->VERSION;
-	$s->fatal("Schedule::Helpers $helpers differs from Schedule.pm version $VERSION")
-		if($helpers ne $VERSION);
+	}, $class);
+	$s->check_version($name, $ver);
+	$s->check_version('Schedule::Common::Helpers');
 	$s
 }
 
@@ -169,12 +163,45 @@ sub warning {
 		join("\n" . (' ' x (length($name) + 11)), @_), "\n")
 }
 
+sub check_version {
+	my $s = shift();
+	my $name = (@_ ? shift() : caller());
+	my $ver;
+	if(@_) {
+		$ver = $_[0]
+	} else {
+		no strict 'refs';
+		$ver = ${"$name\::VERSION"}
+	}
+	$s->fatal("$name version $ver differs from Schedule::Common::Connect version $VERSION")
+		if($ver ne $VERSION)
+}
+
+sub usage {
+	my $s = shift();
+	my $o = ((scalar(@_) <= 1) ? ($_[0] // 1) : {@_});
+	$o = (&is_nonnegative($o) ? {-exitval => $o} : {-message => $o})
+		unless(ref($o) eq 'HASH');
+	my $name;
+	if(($s->name()) =~ m{serv}i) {
+		require Schedule::Man::Server;
+		$name = &Schedule::Man::Server::man_server_init($s)
+	} else {
+		require Schedule::Man::Schedule;
+		$name = &Schedule::Man::Schedule::man_schedule_init($s)
+	}
+	$o->{'-input'} = File::Spec->catfile('Schedule', 'Man', $name);
+	$o->{'-pathlist'} = \@INC;
+	require Pod::Usage;
+	Pod::Usage::pod2usage($o)
+}
+
 sub get_options {
 	my $s = shift();
 	my @passfile = ();
 	my $quiet = 0;
 	Getopt::Long::Configure(qw(bundling gnu_compat no_permute));
-	GetOptions(
+	Getopt::Long::GetOptions(
 	'tcp|t', sub { $s->tcp(1) },
 	'local|l', sub { $s->tcp('') },
 	'password|y=s', sub { $s->password($_[1]) },
@@ -189,15 +216,15 @@ sub get_options {
 	'daemon|B', sub { $s->daemon(1) },
 	'detach|E', sub { $s->daemon(-1) },
 	'quiet|q+', \$s->{quiet},
-	'help|h', sub { pod2usage(1) },
-	'man|?', sub { pod2usage(-verbose => 2) },
+	'help|h', sub { $s->usage(1) },
+	'man|?', sub { $s->usage(-verbose => 2) },
 	'version|V', sub { print($s->name(), " $VERSION\n"); exit(0) },
-	@_) or pod2usage(2);
+	@_) or $s->usage(2);
 	if(@ARGV) {
 		if($ARGV[0] =~ m/^man/i) {
-			pod2usage(verbose => 2)
+			$s->usage(-verbose => 2)
 		} elsif($ARGV[0] =~ m/^help/i) {
-			pod2usage(0)
+			$s->usage(0)
 		}
 	}
 	# Read password file before dropping permissions
@@ -221,26 +248,23 @@ sub check_options {
 		unless(&is_nonnegative($port) && ($port <= 0xFFFF));
 	if(($s->daemon() // 0) < 0) {
 		eval {
-			require POSIX;
-			POSIX->import()
+			require POSIX
 		};
 		$s->fatal('you might need to install perl module POSIX', $@)
 			if($@)
 	}
 	return unless(defined($s->password()));
 	eval {
-		require Crypt::Rijndael;
-		Crypt::Rijndael->import()
+		require Crypt::Rijndael
 	};
 	$s->fatal('you might need to install perl module Crypt::Rijndael', $@)
 		if($@);
 	eval {
-		require Digest::SHA;
-		Digest::SHA->import(qw(sha256));
+		require Digest::SHA
 	};
 	$s->fatal('you might need to install perl module Digest::SHA', $@)
 		if($@);
-	my $hash = sha256($s->password());
+	my $hash = Digest::SHA::sha256($s->password());
 	my $p = Crypt::Rijndael->new($hash, Crypt::Rijndael::MODE_CFB());
 	$p->set_iv('a' x 16);
 	$s->password($p)
@@ -370,7 +394,7 @@ sub my_decrypt {
 }
 
 sub padding {
-	my $str = sha256(rand() . rand() . rand() . rand()) . shift() . '17';
+	my $str = Digest::SHA::sha256(rand() . rand() . rand() . rand()) . shift() . '17';
 	my $mod = (length($str) & 0x0F);
 	$mod ? ($str . ("z" x (16 - $mod))) : $str
 }
@@ -381,4 +405,4 @@ sub unpadding {
 	$_[0] =~ s{17z*$}{}
 }
 
-1;
+'EOF'

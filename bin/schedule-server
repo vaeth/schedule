@@ -1,17 +1,21 @@
 #!/usr/bin/env perl
+# Copyright Martin Väth <martin@mvath.de>.
+# This is part of the schedule project.
 use strict;
 use warnings;
 use integer;
-use Pod::Usage;
-use File::Path qw(make_path);
-use File::Spec;
-use IO::Select;
-use IO::Socket; # INET or UNIX, depending on user's choice
-#use Sys::Hostname;   # not mandatory but recommended
-#use Term::ANSIColor; # not mandatory but recommended: fallback to no color
-#use Crypt::Rijndael; # needed for password protection
-#use Digest::SHA;     # needed for password protection
-#use POSIX;           # needed for --detach
+use File::Path ();
+use File::Spec ();
+#use Crypt::Rijndael (); # needed for password protection
+#use Digest::SHA (); # needed for password protection
+#use Exporter qw(import);
+#use Getopt::Long ();
+#use IO::Select ();
+#use IO::Socket (); # INET or UNIX, depending on user's choice
+#use POSIX (); # needed for --detach
+#use Pod::Usage (); # optional, but no manpage or help without this
+#use Sys::Hostname (); # not mandatory but recommended
+#use Term::ANSIColor (); # not mandatory but recommended: fallback to no color
 
 use lib '/usr/share/schedule';
 use FindBin;
@@ -20,250 +24,14 @@ if(($FindBin::Bin // '') ne '') {
 	use lib File::Spec->catdir($FindBin::Bin, 'lib');
 	use lib $FindBin::Bin
 }
-use Schedule::Helpers qw(/./);
-use Schedule::Connect;
-my $s = Schedule::Connect->new('schedule-server', '3.1');
+use Schedule::Common::Connect ();
+use Schedule::Common::Helpers qw(env_to_array is_nonnegative);
 
-=head1 NAME
+our $VERSION = '4.0';
 
-schedule-server - server for the schedule client; schedule man for details
+# Global/State variables:
 
-=head1 SYNOPSIS
-
-=over 8
-
-=item B<schedule-server> [options]
-
-Start server for the B<schedule> command.
-Use B<schedule-server help> or B<schedule-server man> for a brief help or
-verbose usage instructions, respectively.
-
-=back
-
-=head1 DESCRIPTION
-
-This is a daemon which needs to run if the B<schedule> command shall be used.
-(Versions of the daemon and of the B<schedule> command need to match.)
-It can be started as a user or as root - it only needs permissions to setup a
-TCP port or a unix domain socket, depending on the communication type
-you choose. Only in special occassions it emits diagnostic messages on STDERR.
-
-Note that although this daemon has the ability to background itself,
-it is not recommended to use this possibility for the system's main server.
-For instance, this daemon does not generate a PID file by itself.
-Use a controlling program start-stop-daemon or a daemon-managing framework
-like systemd, if available.
-
-It should be completely safe to run this daemon as root, but to limit the
-effect of unforeseen bugs, for security reasons, if the effective user id is 0,
-this daemon tries to change its permissions to user and group "nobody".
-If the user/group cannot be found, the id 65534 is used instead.
-
-By default, the daemon uses a TCP socket on a local port for communication.
-Note that this means that every user on the local machine can communicate
-with the server and list/start/remove/change the order of queued commands
-of all users using the same daemon. This is intentional, and you should be
-aware of the security risks and make use of the encryption features
-if you use this daemon globally.
-
-If you do not want this, you can run this daemon locally, communicating by a
-file (unix domain socket). In this case, you will usually run the daemon
-locally as a user and specify the option B<--local> (and/or B<--file>).
-
-If you make use of the encryption feature or of the B<--local> option,
-it is recommended, to setup an alias or a shell script to call
-B<schedule> always with the same B<--local> or B<--file> option, too.
-You can use the variables B<SCHEDULE_OPTS> and/or B<SCHEDULE_SERVER_OPTS>
-for this purpose.
-
-=head1 OPTIONS
-
-The default of the options is taken from the environment variable
-B<SCHEDULE_SERVER_OPTS>; shell-quoting in the value is supported.
-Moreover, (unquoted) environment variable references of the form $VAR
-or ${VAR} in it are (recursively) expanded.
-If B<SCHEDULE_SERVER_OPTS> is undefined, the default is taken from the
-environment variable B<SCHEDULE_OPTS>, according to the same rules.
-
-=over 8
-
-=item B<--tcp> or B<-t>
-
-Use a tcp socket (port) for IPC with the client(s). This is the default.
-This option exists so that you can override an earlier specified
-(e.g. set in B<SCHEDULE> or B<SCHEDULE_SERVER>) option B<-l>.
-
-=item B<--local> or B<-l>
-
-Use a unix domain socket (file) for IPC with the client(s).
-
-=item B<--file=>I<file> or B<-f> I<file>
-
-Use I<file> as a unix domain socket filename for IPC.
-The default is B<${TMPDIR}/schedule-${USER}/server>.
-All parent directories are created if they do not exist.
-This option implies B<--local> (unless overridden later on).
-
-=item B<--umask>I<umask> or B<-m> I<umask>
-
-Use this umask for creating directories and/or unix domain socket file.
-The argument is a number; prepend "0" to specify that it is octal.
-Default is 0077. It may be a security risk to change this!
-
-=item B<--skip-check> or B<-S>
-
-Do not change ownership of the parent directory of I<file>.
-Normally, this is checked since it can be a security risk if this is
-not owned by a trusted user.
-Do not use this option unless you know what you are doing!
-
-=item B<--port=>I<port> or B<-P> I<port>
-
-Use port number I<port>; default is B<8471>.
-This option implies B<--tcp> (unless overridden later on).
-
-=item B<--addr=>I<addr> or B<-A> I<addr>
-
-Bind to I<addr>. The default is 127.0.0.1 (localhost only).
-If you want to listen worldwide, use B<--addr 0.0.0.0> but be aware about
-the security implications: Everybody will be able to start/see/re-order/cancel
-your tasks unless you use encryption with B<--passfile>.
-This option implies B<--tcp> (unless overridden later on).
-
-=item B<--timeout=>I<seconds> or B<-T> I<seconds>
-
-Time to wait in case of communication problems; the default is 10 B<seconds>.
-The value B<0> means to skip the timeout.
-
-=item B<--passfile=>I<passfile> or B<-Y> I<passfile>
-
-Read the first line from I<password-file> (without the newline)
-and use it as a password to encrypt communication between B<schedule>
-and B<schedule-server>. Both programs must use the same password for a
-succesfull communication.
-
-The I<password-file> is read before permissions are dropped so that
-you can (and should) restrict read-permissions on this file.
-
-This option can be used accumulatively:
-The first existing I<password-file> with a nonempty first line is used.
-If no such file is found, this option is tacitly ignored.
-This is to make it safe to specify this option in B<SCHEDULE_SERVER_OPTS>
-or B<SCHEDULE_OPTS> if no corresponding file exists.
-
-=item B<--password=>I<password> or B<-y> I<password>
-
-This is like B<--passfile>, with the difference that you specify the
-password directly. This option is dangerous, because many systems allow
-other users to see the commandline/environment (hence the password is visible).
-
-=item B<--background> or B<--bg> or B<-b>
-
-Fork into background mode.
-To use this option, your system must know fork(), of course.
-
-This option is not recommended for system servers:
-Use facilities of your init-system instead.
-
-=item B<--daemon> or B<-B>
-
-This is like B<--background>, but it also partially detaches from terminal,
-discarding all subsequent standard input/output.
-
-This option is not recommended for system servers:
-Use facilities of your init-system instead.
-
-=item B<--detach> or B<-E>
-
-This is like B<--daemon>, but fully detaches from terminal, discarding also
-error output.
-To avoid unexpected issues with relatice paths, the current working directory
-is kept (and thus remains occupied). Therefore you might want to change to the
-root directory before using this option.
-
-This option is not recommended for system servers:
-Use facilities of your init-system instead.
-
-=item B<--keep-permissions> or B<-k>
-
-Do not try to drop permissions, even if started as root.
-It is equivalent to specify B<--no-change-user> and B<--no-change-group>.
-
-=item B<--change-permission> or B<-K>
-
-Try to drop permissions, even if not started as root.
-It is equivalent to specify B<--change-user> and B<--change-group>.
-
-=item B<--no-change-user> or B<-n>
-
-Try to keep permissions of user, independently of how the group is treated.
-
-=item B<--no-change-group> or B<-N>
-
-Try to keep permissions of group (and associated groups),
-ndependently of how the the user is treated.
-
-=item B<--change-user> or B<-c>
-
-Try to drop permissions of user, independently of how the group is treated.
-
-=item B<--change-group> or B<-C>
-
-Try to drop permissions of group (and associated groups),
-independently of how the the user is treated.
-
-=item B<--user=>I<user> or B<-u> I<user>
-
-Drop permissions to user I<user> instead of B<nobody>.
-
-=item B<--group=>I<group> or B<-g> I<group>
-
-Drop permissions to group I<group> instead of B<nobody>.
-
-=item B<--uid=>I<uid> or B<-U> I<uid>
-
-Drop permissions to user with id I<uid> instead of 65534.
-(If this is specified and valid the value of B<--user> is ignored.)
-
-=item B<--gid=>I<gid> or B<-G> I<gid>
-
-Drop permissions to user with id I<gid> instead of 65534.
-(If this is specified and valid the value of B<--group> is ignored.)
-
-=item B<--color> or B<-F>
-
-Try to color even if output is not a terminal.
-
-=item B<--no-color> or B<--nocolor> or B<-p>
-
-Do not color the output.
-Setting the environment variable B<ANSI_COLORS_DISABLED> has the same effect.
-
-=item B<--quiet> or B<-q> (accumulative)
-
-Be quiet.
-
-=item B<--help> or B<-h>
-
-Display brief help.
-
-=item B<--man> or B<-?>
-
-Display extended help as a manpage.
-
-=back
-
-=head1 COPYRIGHT AND LICENSE
-
-Copyright Martin VE<auml>th.
-This project is under a BSD type license which means that you can do
-practically anything with it except removing my name.
-
-=head1 AUTHOR
-
-Martin VE<auml>th E<lt>martin@mvath.deE<gt>
-
-=cut
+my $s = Schedule::Common::Connect->new('schedule-server', $VERSION);
 
 # Default for the Options:
 
@@ -276,464 +44,9 @@ my $group = 'nobody';
 my $keepuser = $<;
 my $keepgroup = $keepuser;
 
-# Global/State variables:
-
-my $joblist = [];
-my $serverid = rand() . '(' . $$ . ')';
-$serverid =~ s{^\s*\d*[.,]}{u};
-my $unique = 0;
-my $socket = undef;
-
-# Constant variables:
-
-my $have_re = qr{([^\c@]*)\c@([^\c@]*)\c@([^\c@]*)\c@?};
-
 #
 # Functions
 #
-
-sub signal_handler {
-	&signals();
-	&send_exit(7);
-	&closeserver();
-	unlink($s->file()) unless($s->tcp());
-	exit(130)
-}
-
-sub openserver {
-	$socket = ($s->tcp() ? new IO::Socket::INET(
-		LocalAddr => $s->addr(),
-		LocalPort => $s->port(),
-		Type => SOCK_STREAM(),
-		Listen => SOMAXCONN(),
-		Reuse => 1
-	) : new IO::Socket::UNIX(
-		Local => $s->file(),
-		Type => SOCK_STREAM(),
-		Listen => SOMAXCONN(),
-		Reuse => 1
-	));
-	unless(defined($socket)) {
-		$s->fatal('unable to setup socket: ' . $!,
-			($s->tcp() ? () : 'maybe you should remove ' .
-				$s->file()));
-		return ''
-	}
-	&signals(\&signal_handler);
-	1
-}
-
-sub closeserver {
-	my $ret = 1;
-	$ret = '' if(defined($socket) && !($socket->close()));
-	unlink($s->file()) unless($s->tcp() || !(-S $s->file()));
-	$ret
-}
-
-{ # The big server loop with related variables and functions
-my $will_close;
-my $cmd;
-my $data;
-my $conn;
-
-sub serverloop {
-	while(defined($conn = $socket->accept())) {
-		unless($s->conn_recv($conn, $data)) {
-			$s->warning('broken connection attempt')
-				unless($s->quiet());
-			$conn->close();
-			next
-		}
-		$will_close = 1;
-		$data =~ s{^([^\c@]*)\c@?}{};
-		$cmd = ($1 // '');
-		if($cmd eq 'have') {
-			&loop_have()
-		} elsif(($cmd eq 'list') || ($cmd eq 'status')) {
-			redo if &loop_list()
-		} elsif($cmd eq 'close') {
-			# Sort according to expected frequency
-		} elsif($cmd eq 'version') {
-			redo if &loop_version()
-		} elsif(($cmd eq 'queue') || ($cmd eq 'start') || ($cmd eq 'start-or-queue')) {
-			&loop_queue()
-		} elsif($cmd eq 'end') {
-			&loop_end()
-		} elsif(($cmd eq 'run') || ($cmd eq 'wait')) {
-			&loop_run()
-		} elsif(($cmd eq 'bg') || ($cmd eq 'unique')) {
-			redo if(&loop_bg())
-		} elsif($cmd eq 'cancel') {
-			redo if &loop_cancel()
-		} elsif($cmd eq 'insert') {
-			&loop_insert()
-		} elsif($cmd eq 'remove') {
-			&loop_remove()
-		} elsif($cmd eq 'stop') {
-			return &loop_stop()
-		} else {
-			$s->warning('protocol violation') unless($s->quiet())
-		}
-		$conn->close() if($will_close)
-	}
-	''
-}
-
-sub loop_version {
-	$s->conn_send($conn, 'schedule-server ' . $s->version())
-}
-
-sub loop_queue {
-	my $send;
-	if($cmd eq 'start-or-queue') {
-		$data =~ s{$have_re}{};
-		$cmd = (&have_jobs($1, $2, $3) ? 'queue' : 'start');
-		$send = $cmd . "\c@"
-	} else {
-		$send = ''
-	}
-	$data =~ s{^([^\c@]*)\c@}{};
-	my $index = &my_index($1, 1);
-	$index = scalar(@$joblist) unless(&is_nonnegative($index));
-	my $stat = (($cmd eq 'start') ? '' : undef);
-	++$unique;
-	splice(@$joblist, $index, 0, [$conn, $data, $stat, $unique, []]);
-	$s->conn_send($conn, $send . &form_unique());
-	$will_close = '' unless(defined($stat))
-}
-
-sub loop_run {
-	my $i = &my_index($data);
-	my $reply = &indexname($i);
-	if($reply eq '0') {
-		$s->conn_send($conn, $reply);
-		return
-	}
-	my $job = $joblist->[$i];
-	my $stat = &loop_bgjob($job, ($cmd eq 'wait'));
-	$s->conn_send($conn, $reply . "\c@" . ($stat // '') . "\c@");
-	return 1 if(&is_nonnegative($stat));
-	&push_wait($job, $conn);
-	$will_close = ''
-}
-
-sub loop_bg {
-	my $index = &my_index($data);
-	my $reply = &indexname($index);
-	if($reply ne '0') {
-		my $job = $joblist->[$index];
-		$reply = &form_unique(&get_unique($job));
-		$reply .= "\c@" . &loop_bgjob($job) . "\c@" if($cmd eq 'bg')
-	}
-	$s->conn_send($conn, $reply)
-}
-
-sub loop_bgjob {
-	my ($job, $check_only) = @_;
-	my $stat = &get_status($job);
-	return $stat if(defined($stat) || ($check_only // ''));
-	&set_status($job, '');
-	$s->conn_send(&get_conn($job), 'run');
-	''
-}
-
-sub loop_end() {
-	$data =~ s{^([^\c@]*)\c@?}{};
-	return unless(defined(my $j = &job_from_unique($1)));
-	&send_finish($j, $data);
-	my $stat = &get_status($j);
-	&set_status($j, $data) if(($stat // 1) eq '')
-}
-
-sub loop_cancel() {
-	$data =~ s{^(\d+)\c@?}{};
-	my $stat = ($1 // 0);
-	my $index = &my_index($data);
-	my $reply = &indexname($index);
-	if($reply ne '0') {
-		my $job = $joblist->[$index];
-		$reply .= "\c@-" unless(&send_remove($job, $stat));
-		&send_finish($job, $stat);
-		&set_status($job, $stat)
-	}
-	$s->conn_send($conn, $reply)
-}
-
-sub loop_list() {
-	my $i = &my_index($data);
-	my $reply = &indexname($i);
-	if($reply ne '0') {
-		my $job = $joblist->[$i];
-		$reply .= "\c@\@" . &get_unique($job);
-		$reply .= "\c@" . (&get_status($job) // '-');
-		$reply .= "\c@" . &get_cmd($job) if($cmd eq 'list')
-	}
-	$s->conn_send($conn, $reply)
-}
-
-sub loop_have() {
-	$data =~ m{$have_re};
-	$s->conn_send($conn, &have_jobs($1, $2, $3))
-}
-
-sub loop_insert() {
-	$data =~ s{([^\c@]*)\c@?}{};
-	my $index = &my_index($1, 1);
-	return unless(defined($index));
-	my @insert = ();
-	for my $i (&unique_indices($data)) {
-		push(@insert, $joblist->[$i]);
-		$joblist->[$i] = undef
-	}
-	my $oldlist = $joblist;
-	$joblist = [];
-	for(my $i = 0; $i < @$oldlist; ++$i) {
-		if($index == @$joblist) {
-			push(@$joblist, @insert);
-			@insert = ()
-		}
-		my $j = $oldlist->[$i];
-		push(@$joblist, $j) if(defined($j))
-	}
-	push(@$joblist, @insert)
-}
-
-sub loop_remove() {
-	$data =~ s{^(\d+)\c@?}{};
-	my $stat = ($1 // 0);
-	my @fail = ();
-	for my $i (&unique_indices($data)) {
-		my $job = $joblist->[$i];
-		push(@fail, &indexname($i)) unless(&send_remove($job, $stat));
-		&send_finish($job, $stat);
-		$joblist->[$i] = undef
-	}
-	my $oldlist = $joblist;
-	$joblist = [];
-	for(my $i = 0; $i < @$oldlist; ++$i) {
-		my $j = $oldlist->[$i];
-		push(@$joblist, $j) if(defined($j))
-	}
-	$s->conn_send($conn, join("\c@", '', @fail))
-}
-
-sub loop_stop() {
-	$data =~ m{^(\d+)};
-	my $stat = ($1 // 0);
-	my @fail = &send_exit($stat);
-	my $ret = $s->conn_send($conn, join("\c@", '', @fail));
-	$ret = '' if(@fail);
-	$conn->close() && $ret
-}
-
-} # end of server loop
-
-sub send_exit {
-	my ($stat) = @_;
-	my @fail = ();
-	for(my $i = 0; $i < @$joblist; ++$i) {
-		my $job = $joblist->[$i];
-		push(@fail, &indexname($i)) unless(&send_remove($job, $stat));
-		&send_finish($job, $stat)
-	}
-	@fail
-}
-
-sub send_remove {
-	my ($job, $stat) = @_;
-	return 1 if(defined(&get_status($job)));
-	my $ret = 1;
-	my $conn = &get_conn($job);
-	$ret = '' unless($s->conn_send($conn, $stat));
-	$conn->close() && $ret
-}
-
-sub send_finish {
-	my ($job, $stat) = @_;
-	while(defined(my $conn = &shift_wait($job))) {
-		$s->conn_send($conn, $stat)
-	}
-}
-
-sub get_conn {
-	$_[0]->[0]
-}
-
-sub get_cmd {
-	$_[0]->[1]
-}
-
-sub get_status {
-	$_[0]->[2]
-}
-
-sub set_status {
-	$_[0]->[2] = $_[1]
-}
-
-sub get_unique {
-	$_[0]->[3]
-}
-
-sub shift_wait {
-	my $wait = $_[0]->[4];
-	shift(@$wait)
-}
-
-sub push_wait {
-	my ($j, $p) = @_;
-	my $wait = $j->[4];
-	push(@$wait, $p)
-}
-
-sub form_unique {
-	$serverid . ($_[0] // $unique)
-}
-
-# return whether all jobs are ok, finished, started
-
-sub have_jobs {
-	my ($ok, $finished, $started) = @_;
-	my $ret = 0;
-	for my $i (&unique_indices($ok)) {
-		my $s = &get_status($joblist->[$i]);
-		$s = 1 unless(&is_nonempty($s));
-		$ret = $s if($s > $ret);
-	}
-	return $ret if($ret);
-	for my $i (&unique_indices($finished)) {
-		my $s = &get_status($joblist->[$i]);
-		return 1 unless(&is_nonempty($s))
-	}
-	for my $i (&unique_indices($started)) {
-		my $s = &get_status($joblist->[$i]);
-		return 1 unless(defined($s))
-	}
-	0
-}
-
-# return job corresponding to unique identifier
-
-sub job_from_unique {
-	my $i = &index_from_unique(@_);
-	defined($i) ? $joblist->[$i] : undef
-}
-
-# return index in $joblist corresponding to unique identifier
-
-sub index_from_unique {
-	my ($u) = @_;
-	return undef unless(substr($u, $[, length($serverid)) eq $serverid);
-	&index_from_at(substr($u, length($serverid) + $[))
-}
-
-sub index_from_at {
-	my ($u) = @_;
-	return undef unless(&is_nonnegative($u));
-	for(my $i = 0; $i < @$joblist; ++$i) {
-		return $i if(&get_unique($joblist->[$i]) == $u)
-	}
-	undef
-}
-
-sub index_from_pair {
-	my $ret = &index_from_at($_[0]);
-	my $add = $_[1];
-	(defined($ret) && ($add ne '')) ? ($ret + $add) : $ret
-}
-
-# return unique list of internal indices corresponding to index names
-
-sub unique_indices {
-	return () unless((my $max = @$joblist) > 0);
-	my %have = ();
-	my @ret = ();
-	my $s_valid = sub {
-		my ($i) = @_;
-		&is_nonnegative($i) && ($i < $max)
-	};
-	my $s_push = sub {
-		my ($i) = @_;
-		return unless(&{$s_valid}($i) && !exists($have{$i}));
-		$have{$i} = 1;
-		push(@ret, $i)
-	};
-	my $s_pair = sub {
-		my $a = shift();
-		return &index_from_pair($a, $_[0]) if($a ne '');
-		$a = shift();
-		$a = 0 if($a eq '');
-		(--$a >= 0) ? $a : ($a + $max)
-	};
-	for my $name (split(' ', ($_[0] // ''))) {
-		my ($atbeg, $beg, $sep, $atend, $end) = $s->decode_range($name);
-		unless(defined($atbeg)) {
-			$s->warning('invalid job specification: ' .
-				&join_quoted($name)) unless($s->quiet());
-			next
-		}
-		if($sep eq '_') {
-			for(; $atbeg <= $atend; ++$atbeg) {
-				&{$s_push}(&index_from_pair($atbeg, $beg))
-			}
-			next
-		}
-		my $i = &{$s_pair}($atbeg, $beg);
-		if($sep eq '') {
-			&{$s_push}($i);
-			next
-		}
-		next unless(&{$s_valid}($i));
-		my $e = &{$s_pair}($atend, $end);
-		next unless(&{$s_valid}($e));
-		for(; $i <= $e; ++$i) {
-			&{$s_push}($i)
-		}
-	}
-	(@ret)
-}
-
-# return name corresponding to internal index $i
-
-sub indexname {
-	my ($i) = @_;
-	return '0' unless(&is_nonnegative($i) && ($i < @$joblist));
-	++$i;
-	"$i"
-}
-
-# return internal index of array corresponding to arg.
-# If second parameter is 1, let 0 count from end of list + 1,
-# and prefer 0 (instead of undef).
-# The return value may anyway be undefined, e.g. if the specifier is not known
-
-sub my_index {
-	my $arg = (shift() // '');
-	return &index_from_unique($arg) if($arg =~ m{^u});
-	my $end = (shift() // '');
-	if($arg eq '') {
-		return undef unless($end);
-		$arg = '0'
-	}
-	my ($at, $num) = $s->decode_range($arg);
-	unless(defined($at)) {
-		$s->warning('invalid job specification: ' . &join_quoted($arg))
-			unless($s->quiet());
-		return undef
-	}
-	if($at ne '') {
-		$num = &index_from_pair($at, $num);
-		return undef unless(defined($num));
-		return ($end ? 0 : undef) if($num < 0)
-	} elsif($num <= 0) {
-		$num += @$joblist;
-		--$num unless($end);
-		return ($end ? 0 : undef) if($num < 0)
-	} else {
-		--$num
-	}
-	($num < @$joblist) ? $num : ($end ? scalar(@$joblist) : undef)
-}
 
 sub prepare_file {
 	$s->default_filename();
@@ -741,14 +54,14 @@ sub prepare_file {
 	my ($vol, $dir) = File::Spec->splitpath($s->file());
 	$dir = File::Spec->catpath($vol, $dir);
 	return 1 if($dir eq '');
-	$s->fatal("cannot create directory $dir")
-		unless((-d $dir) || make_path($dir));
+	$s->fatal('cannot create directory ' . $dir)
+		unless((-d $dir) || File::Path::make_path($dir));
 	my @stat = lstat($dir);
-	$s->fatal("cannot find directory $dir") unless(@stat);
+	$s->fatal('cannot find directory ' . $dir) unless(@stat);
 	return 1 if($skipcheck);
-	$s->fatal("$dir owned by " . $stat[4] . ':' . $stat[5] .
+	$s->fatal($dir . ' owned by ' . $stat[4] . ':' . $stat[5] .
 		' instead of ' . $< . ':' . $(,
-	"This may be a security risk. If it is intentional use option -S")
+	'This may be a security risk. Use -S if it is intentional')
 		if(($stat[4] != $<) || ($stat[5] != $())
 }
 
@@ -824,12 +137,18 @@ $s->check_options();
 
 # Process arguments:
 
-pod2usage(2) if(@ARGV);
+$s->usage(2) if(@ARGV);
 
 # Call main functions:
 
 &prepare_file() unless($s->tcp());
 $s->forking();
-my $exitstatus = ((&openserver() && &serverloop()) ? 0 : 1);
-$exitstatus = 1 unless(&closeserver());
-exit($exitstatus);
+
+require Schedule::Server::Serverfuncs;
+require Schedule::Server::Loop;
+
+Schedule::Server::Serverfuncs->import(qw(:INIT));
+&server_init($s);
+exit((&openserver($s) &&
+	&Schedule::Server::Loop::serverloop() &&
+	&closeserver()) ? 0 : 1);

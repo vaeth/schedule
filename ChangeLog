@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-4.0:
+	Martin Väth <martin at mvath.de>:
+	- Split into modules to minimize memory footprint
+
 *schedule-3.1:
 	Martin Väth <martin at mvath.de>:
 	- Protocoll cleanup (\0 separators), making data sanitizing superfluous
