@@ -1,9 +1,9 @@
-# Schedule::Man::Server.pm
+# Schedule::Server::Serverman.pm
 #
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Man::Server;
+package Schedule::Server::Serverman;
 
 use strict;
 use warnings;
@@ -13,7 +13,7 @@ our $VERSION = '4.0';
 
 =head1 NAME
 
-schedule-server - server for the schedule client; schedule man for details
+schedule-server - server for the schedule client
 
 =head1 SYNOPSIS
 
@@ -22,8 +22,9 @@ schedule-server - server for the schedule client; schedule man for details
 =item B<schedule-server> [options]
 
 Start server for the B<schedule> command.
-Use B<schedule-server help> or B<schedule-server man> for a brief help or
-verbose usage instructions, respectively.
+
+Use B<schedule-server man> or B<schedule man> to get a verbose manpage
+for the server or client, respectively.
 
 =back
 

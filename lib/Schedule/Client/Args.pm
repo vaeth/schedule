@@ -10,7 +10,7 @@ use warnings;
 use integer;
 use Exporter qw(import);
 
-use Schedule::Common::Helpers qw(join_quoted);
+use Schedule::Helpers qw(join_quoted);
 
 our $VERSION = '4.0';
 
@@ -32,24 +32,30 @@ sub args_init {
 	$s->check_version()
 }
 
-# Check whether @ARGV (resp. passed array reference) are valid job
-# specifications.
+# Normalize @ARGV (resp. passed array reference) and check whether it consists
+# of valid job specifications.
 # Let @ARGV = (':') if there are none (unless array reference is passed).
+# Return true if result is nonempty.
 
 sub validate_args {
 	my ($array) = @_;
+	my $colon_if_empty = '';
 	unless(defined($array)) {
-		unless(@ARGV) {
-			@ARGV = (':');
-			return
-		}
+		$colon_if_empty = 1;
 		$array = \@ARGV
+	}
+	@$array = split(' ', join(' ', @$array));
+	unless(@$array) {
+		return '' unless($colon_if_empty);
+		@$array = (':');
+		return 1
 	}
 	for my $i (@$array) {
 		my ($valid) = $s->decode_range($i);
 		$s->fatal('invalid job specification: ' . &join_quoted($i))
 			unless(defined($valid))
 	}
+	1
 }
 
 'EOF'

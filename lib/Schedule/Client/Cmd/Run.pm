@@ -1,9 +1,9 @@
-# Schedule::Cmd::Run.pm
+# Schedule::Client::Cmd::Run.pm
 #
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Cmd::Run;
+package Schedule::Client::Cmd::Run;
 
 use strict;
 use warnings;

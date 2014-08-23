@@ -1,9 +1,9 @@
-# Schedule::Cmd::List.pm
+# Schedule::Client::Cmd::List.pm
 #
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Cmd::List;
+package Schedule::Client::Cmd::List;
 
 use strict;
 use warnings;
@@ -12,7 +12,7 @@ use integer;
 use Schedule::Client::Args;
 use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Client::Iterator;
-use Schedule::Common::Helpers qw(is_nonnegative join_quoted my_color);
+use Schedule::Helpers qw(is_nonnegative join_quoted my_color);
 
 our $VERSION = '4.0';
 

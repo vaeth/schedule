@@ -1,9 +1,9 @@
-# Schedule::Common::Helpers.pm
+# Schedule::Helpers.pm
 #
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Common::Helpers;
+package Schedule::Helpers;
 
 use strict;
 use warnings;

@@ -1,9 +1,9 @@
-# Schedule::Cmd::Cancel.pm
+# Schedule::Client::Cmd::Cancel.pm
 #
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Cmd::Cancel;
+package Schedule::Client::Cmd::Cancel;
 
 use strict;
 use warnings;

@@ -11,7 +11,7 @@ use integer;
 use Exporter qw(import);
 use IO::Socket (); # INET or UNIX, depending on user's choice
 
-use Schedule::Common::Helpers qw(:IS join_quoted signals);
+use Schedule::Helpers qw(:IS join_quoted signals);
 
 our $VERSION = '4.0';
 

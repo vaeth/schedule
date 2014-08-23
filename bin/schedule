@@ -24,14 +24,14 @@ if(($FindBin::Bin // '') ne '') {
 	use lib File::Spec->catdir($FindBin::Bin, 'lib');
 	use lib $FindBin::Bin
 }
-use Schedule::Common::Connect ();
-use Schedule::Common::Helpers qw(env_to_array is_nonnegative join_quoted);
+use Schedule::Connect ();
+use Schedule::Helpers qw(env_to_array is_nonnegative join_quoted);
 
 our $VERSION = '4.0';
 
 # Global/State variables:
 
-my $s = Schedule::Common::Connect->new('schedule', $VERSION);
+my $s = Schedule::Connect->new('schedule', $VERSION);
 
 # Default for the Options:
 
@@ -49,48 +49,48 @@ my $tests = [[], [], []];
 #
 
 sub cmd_queue {
-	require Schedule::Cmd::Queue;
-	&Schedule::Cmd::Queue::queue(@_, $destjob, $cancel, $keepdir, $tests)
+	require Schedule::Client::Cmd::Queue;
+	&Schedule::Client::Cmd::Queue::queue(@_, $destjob, $cancel, $keepdir, $tests)
 }
 
 sub cmd_run {
-	require Schedule::Cmd::Run;
-	&Schedule::Cmd::Run::run(@_)
+	require Schedule::Client::Cmd::Run;
+	&Schedule::Client::Cmd::Run::run(@_)
 }
 
 sub cmd_parallel {
-	require Schedule::Cmd::Parallel;
-	&Schedule::Cmd::Parallel::parallel(@_)
+	require Schedule::Client::Cmd::Parallel;
+	&Schedule::Client::Cmd::Parallel::parallel(@_)
 }
 
 sub cmd_list {
-	require Schedule::Cmd::List;
-	&Schedule::Cmd::List::list(@_, $nouser, $nohost, $nodir, $nocommand)
+	require Schedule::Client::Cmd::List;
+	&Schedule::Client::Cmd::List::list(@_, $nouser, $nohost, $nodir, $nocommand)
 }
 
 sub cmd_test {
-	require Schedule::Cmd::Test;
-	&Schedule::Cmd::Test::test(@_)
+	require Schedule::Client::Cmd::Test;
+	&Schedule::Client::Cmd::Test::test(@_)
 }
 
 sub cmd_cancel {
-	require Schedule::Cmd::Cancel;
-	&Schedule::Cmd::Cancel::cancel($cancel)
+	require Schedule::Client::Cmd::Cancel;
+	&Schedule::Client::Cmd::Cancel::cancel($cancel)
 }
 
 sub cmd_remove {
-	require Schedule::Cmd::Remove;
-	&Schedule::Cmd::Remove::remove($cancel)
+	require Schedule::Client::Cmd::Remove;
+	&Schedule::Client::Cmd::Remove::remove($cancel)
 }
 
 sub cmd_stop_server {
-	require Schedule::Cmd::Remove;
-	&Schedule::Cmd::Remove::remove($cancel, 1)
+	require Schedule::Client::Cmd::Remove;
+	&Schedule::Client::Cmd::Remove::remove($cancel, 1)
 }
 
 sub cmd_insert {
-	require Schedule::Cmd::Insert;
-	&Schedule::Cmd::Insert::insert($destjob)
+	require Schedule::Client::Cmd::Insert;
+	&Schedule::Client::Cmd::Insert::insert($destjob)
 }
 
 #

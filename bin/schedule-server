@@ -24,14 +24,14 @@ if(($FindBin::Bin // '') ne '') {
 	use lib File::Spec->catdir($FindBin::Bin, 'lib');
 	use lib $FindBin::Bin
 }
-use Schedule::Common::Connect ();
-use Schedule::Common::Helpers qw(env_to_array is_nonnegative);
+use Schedule::Connect ();
+use Schedule::Helpers qw(env_to_array is_nonnegative);
 
 our $VERSION = '4.0';
 
 # Global/State variables:
 
-my $s = Schedule::Common::Connect->new('schedule-server', $VERSION);
+my $s = Schedule::Connect->new('schedule-server', $VERSION);
 
 # Default for the Options:
 

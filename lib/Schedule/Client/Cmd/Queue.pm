@@ -1,9 +1,9 @@
-# Schedule::Cmd::Queue.pm
+# Schedule::Client::Cmd::Queue.pm
 #
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Cmd::Queue;
+package Schedule::Client::Cmd::Queue;
 
 use strict;
 use warnings;
@@ -11,7 +11,7 @@ use integer;
 use Cwd ();
 
 use Schedule::Client::Clientfuncs qw(:FUNCS);
-use Schedule::Common::Helpers qw(:IS :SYSQUERY signals);
+use Schedule::Helpers qw(:IS :SYSQUERY signals);
 #use Schedule::Client::Testarg;
 
 our $VERSION = '4.0';
@@ -58,6 +58,10 @@ sub queue {
 		$runmode = $1;
 		$unique = $2
 	}
+	my $job = 'job';
+	if($unique =~ m{(\d+)$}) {
+		$job .= ' @' . $1
+	}
 	&signals(\&cancel_job);
 	return '' unless($success);
 	if($runmode eq 'queue') {
@@ -72,19 +76,36 @@ sub queue {
 	return '' unless(&closeclient());
 	my $sys = system(@ARGV);
 	if($sys < 0) {
-		$s->error('job could not be executed') unless($s->quiet());
+		$s->error($job . ' could not be executed') unless($s->quiet());
 		$sys = 127
 	} elsif($sys & 127) {
-		$s->error('job died with signal ' . ($sys & 127) .
+		$s->error($job . ' died with signal ' . ($sys & 127) .
 			(($sys & 128) ? '' : ' (core dumped)'))
 				unless($s->quiet());
 		$sys = 127
 	} else {
 		$sys >>= 8;
-		$s->error("exit with status " . $sys) if($sys && !$s->quiet());
+		&jobinfo($job, $sys)
 	}
+	$exitstatus = $sys;
 	&set_exitstatus($sys);
 	&send_status($sys)
+}
+
+sub jobinfo {
+	my ($job, $status) = @_;
+	return if($s->quiet() || !$s->stdout_term());
+	my $name = $s->name();
+	my $stat = $status;
+	if($s->color_stdout()) {
+		$name = $s->incolor(0, $name);
+		$stat = $s->incolor(2, $status) if($status)
+	}
+	if($status) {
+		print("$name: $job exited with status $stat\n")
+	} else {
+		print("$name: $job finished\n")
+	}
 }
 
 # Cancel a job (if "schedule queue" is interrupted by a signal):

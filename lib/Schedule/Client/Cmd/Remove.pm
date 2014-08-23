@@ -1,9 +1,9 @@
-# Schedule::Cmd::Remove.pm
+# Schedule::Client::Cmd::Remove.pm
 #
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Cmd::Remove;
+package Schedule::Client::Cmd::Remove;
 
 use strict;
 use warnings;

@@ -11,7 +11,7 @@ use integer;
 use Exporter qw(import);
 use IO::Socket (); # INET or UNIX, depending on user's choice
 
-use Schedule::Common::Helpers qw(is_nonempty);
+use Schedule::Helpers qw(is_nonempty);
 
 our $VERSION = '4.0';
 

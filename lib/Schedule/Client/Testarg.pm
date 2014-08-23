@@ -37,9 +37,7 @@ sub test_empty {
 	my ($tests) = @_;
 	my $ret = 1;
 	for my $a (@$tests) {
-		$ret = '' if(@$a);
-		@$a = split(' ', join(' ', @$a));
-		&validate_args($a)
+		$ret = '' if(&validate_args($a))
 	}
 	$ret
 }

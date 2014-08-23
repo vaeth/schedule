@@ -9,7 +9,7 @@ use strict;
 use warnings;
 use integer;
 
-use Schedule::Common::Helpers qw(is_nonnegative);
+use Schedule::Helpers qw(is_nonnegative);
 use Schedule::Server::Serverfuncs qw(:FUNCS);
 
 our $VERSION = '4.0';
@@ -143,10 +143,11 @@ sub loop_bgjob {
 
 sub loop_end() {
 	$data =~ s{^([^\c@]*)\c@?}{};
-	return unless(defined(my $j = &job_from_unique($1)));
-	&send_finish($j, $data);
-	my $stat = &get_status($j);
-	&set_status($j, $data) if(($stat // 1) eq '')
+	my $j = &job_from_unique($1);
+	return unless(defined($j));
+	my $stat = (&is_nonnegative($data) ? $data : 7);
+	&set_status($j, $stat);
+	&send_finish($j, $stat)
 }
 
 sub loop_cancel() {

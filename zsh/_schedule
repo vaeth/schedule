@@ -8,7 +8,7 @@ service_opts=(
 '(1 * -)'{'--man','-\\?'}'[show extended help as a manpage]'
 '(1 * -)'{'--version','-V'}'[print version and exit]'
 {'(--port)-P+','(-P)--port='}'[PORT (set TCP port)]:port:(127.0.0.1)'
-{'(--file)-f+','(-f)--file='}'[FILE (use FILE as socket)]:socket:_file "-g*(=)"'
+{'(--file)-f+','(-f)--file='}'[FILE (use FILE as socket)]:socket:_files "-g*(=)"'
 {'(--addr)-A+','(-A)--addr='}'[ADDR (set address)]:port:(8471)'
 {'(--timeout)-T+','(-T)--timeout='}'[SECONDS (set timeout)]:seconds:(10)'
 {'(--password)-y+','(-y)--password='}'[PASSWORD (encrypt using PASSWORD)]:password:(p P)'

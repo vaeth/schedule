@@ -1,9 +1,9 @@
-# Schedule::Cmd::Insert.pm
+# Schedule::Client::Cmd::Insert.pm
 #
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Cmd::Insert;
+package Schedule::Client::Cmd::Insert;
 
 use strict;
 use warnings;

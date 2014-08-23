@@ -1,9 +1,9 @@
-# Schedule::Cmd::Parallel.pm
+# Schedule::Client::Cmd::Parallel.pm
 #
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Cmd::Parallel;
+package Schedule::Client::Cmd::Parallel;
 
 use strict;
 use warnings;

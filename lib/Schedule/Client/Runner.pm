@@ -11,7 +11,7 @@ use integer;
 use Exporter qw(import);
 
 use Schedule::Client::Clientfuncs qw(:FUNCS);
-use Schedule::Common::Helpers qw(is_nonnegative);
+use Schedule::Helpers qw(is_nonnegative);
 
 our $VERSION = '4.0';
 

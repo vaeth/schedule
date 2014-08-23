@@ -1,9 +1,9 @@
-# Schedule::Common::Connect.pm
+# Schedule::Connect.pm
 #
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Common::Connect;
+package Schedule::Connect;
 
 use strict;
 use warnings;
@@ -16,7 +16,7 @@ use IO::Select ();
 #use POSIX (); # needed for --detach
 #use Pod::Usage (); # optional, but no manpage or help without this
 
-use Schedule::Common::Helpers qw(:COLOR :IS :SYSQUERY);
+use Schedule::Helpers qw(:COLOR :IS :SYSQUERY);
 
 our $VERSION = '4.0';
 
@@ -40,7 +40,7 @@ sub new {
 		quiet => '0'
 	}, $class);
 	$s->check_version($name, $ver);
-	$s->check_version('Schedule::Common::Helpers');
+	$s->check_version('Schedule::Helpers');
 	$s
 }
 
@@ -134,34 +134,42 @@ sub fatal {
 sub error {
 	my $s = shift();
 	my $name = $s->name();
-	my $namecol = '';
-	my $errcol = '';
-	my $reset = '';
+	my $error = 'error';
 	if($s->color_stderr()) {
-		$namecol = &my_color('bold');
-		$errcol = &my_color('bold red');
-		$reset = &my_color('reset');
+		$name = $s->incolor(0, $name);
+		$error = $s->incolor(2, $error)
 	}
-	print(STDERR $namecol . $name . $reset . ': ' .
-		$errcol . 'error' . $reset . ': ',
+	print(STDERR $name . ': ' . $error . ': ',
 		join("\n" . (' ' x (length($name) + 9)), @_), "\n");
 }
 
 sub warning {
 	my $s = shift();
 	my $name = $s->name();
-	my $namecol = '';
-	my $warncol = '';
-	my $reset = '';
+	my $warning = 'warning';
 	if($s->color_stderr()) {
-		$namecol = &my_color('bold');
-		$warncol = &my_color('bold cyan');
-		$reset = &my_color('reset');
+		$name = $s->incolor(0, $name);
+		$warning = $s->incolor(2, $warning)
 	}
-	print(STDERR $namecol . $name . $reset . ': ' .
-		$warncol . 'warning' . $reset . ': ',
+	print(STDERR $name . ': ' . $warning . ': ',
 		join("\n" . (' ' x (length($name) + 11)), @_), "\n")
 }
+
+{ # some static closures
+	my $reset_col = undef;
+	my $name_col = undef;
+	my $warn_col = undef;
+	my $err_col = undef;
+sub incolor {
+	my $s = shift();
+	my $mode = shift();
+	$reset_col //= &my_color('reset');
+	return (($name_col //= &my_color('bold')) . $_[0] . $reset_col)
+		unless($mode);
+	($mode == 1) ?
+		(($warn_col //= &my_color('bold cyan')) . $_[0] . $reset_col) :
+		(($err_col //= &my_color('bold red')) . $_[0] . $reset_col)
+}}
 
 sub check_version {
 	my $s = shift();
@@ -173,7 +181,7 @@ sub check_version {
 		no strict 'refs';
 		$ver = ${"$name\::VERSION"}
 	}
-	$s->fatal("$name version $ver differs from Schedule::Common::Connect version $VERSION")
+	$s->fatal("$name version $ver differs from Schedule::Connect version $VERSION")
 		if($ver ne $VERSION)
 }
 
@@ -184,11 +192,11 @@ sub usage {
 		unless(ref($o) eq 'HASH');
 	my $name;
 	if(($s->name()) =~ m{serv}i) {
-		require Schedule::Man::Server;
-		$name = &Schedule::Man::Server::man_server_init($s)
+		require Schedule::Server::Serverman;
+		$name = &Schedule::Server::Serverman::man_server_init($s)
 	} else {
-		require Schedule::Man::Schedule;
-		$name = &Schedule::Man::Schedule::man_schedule_init($s)
+		require Schedule::Client::Scheduleman;
+		$name = &Schedule::Client::Scheduleman::man_schedule_init($s)
 	}
 	$o->{'-input'} = File::Spec->catfile('Schedule', 'Man', $name);
 	$o->{'-pathlist'} = \@INC;

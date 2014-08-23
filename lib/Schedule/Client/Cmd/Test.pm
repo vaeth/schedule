@@ -1,9 +1,9 @@
-# Schedule::Cmd::Test.pm
+# Schedule::Client::Cmd::Test.pm
 #
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Cmd::Test;
+package Schedule::Client::Cmd::Test;
 
 use strict;
 use warnings;
@@ -11,7 +11,7 @@ use integer;
 
 use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Client::Testarg;
-use Schedule::Common::Helpers qw(is_nonnegative);
+use Schedule::Helpers qw(is_nonnegative);
 
 our $VERSION = '4.0';
 

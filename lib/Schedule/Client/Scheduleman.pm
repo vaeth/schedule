@@ -1,9 +1,9 @@
-# Schedule::Man::Schedule.pm
+# Schedule::Client::Scheduleman.pm
 #
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Man::Schedule;
+package Schedule::Client::Scheduleman;
 
 use strict;
 use warnings;
@@ -50,7 +50,8 @@ The exit status is usually the largest exit status of the scheduled command.
 In case of a fatal communication error (e.g. server not started) the
 exit status 7 is returned.
 
-To get an extended help, type B<schedule man>
+Use B<schedule-server man> or B<schedule man> to get a verbose manpage
+for the server or client, respectively.
 
 =head1 DESCRIPTION
 
