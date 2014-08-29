@@ -14,7 +14,7 @@ use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Client::Iterator;
 use Schedule::Client::Runner;
 
-our $VERSION = '4.0';
+our $VERSION = '4.2';
 
 #
 # Functions

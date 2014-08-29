@@ -12,7 +12,7 @@ use integer;
 use Schedule::Helpers qw(is_nonnegative);
 use Schedule::Server::Serverfuncs qw(:FUNCS);
 
-our $VERSION = '4.0';
+our $VERSION = '4.2';
 
 # Global variables:
 

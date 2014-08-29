@@ -14,7 +14,7 @@ use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Helpers qw(:IS :SYSQUERY signals);
 #use Schedule::Client::Testarg;
 
-our $VERSION = '4.0';
+our $VERSION = '4.2';
 
 # Global variables:
 

@@ -12,7 +12,7 @@ use Exporter qw(import);
 
 use Schedule::Client::Args;
 
-our $VERSION = '4.0';
+our $VERSION = '4.2';
 
 our @EXPORT = qw(
 	testarg_init

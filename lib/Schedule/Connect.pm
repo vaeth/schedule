@@ -18,7 +18,7 @@ use IO::Select ();
 
 use Schedule::Helpers qw(:COLOR :IS :SYSQUERY);
 
-our $VERSION = '4.0';
+our $VERSION = '4.2';
 
 sub new {
 	my ($class, $name, $ver) = @_;
@@ -190,15 +190,17 @@ sub usage {
 	my $o = ((scalar(@_) <= 1) ? ($_[0] // 1) : {@_});
 	$o = (&is_nonnegative($o) ? {-exitval => $o} : {-message => $o})
 		unless(ref($o) eq 'HASH');
-	my $name;
+	my @name;
 	if(($s->name()) =~ m{serv}i) {
 		require Schedule::Server::Serverman;
-		$name = &Schedule::Server::Serverman::man_server_init($s)
+		&Schedule::Server::Serverman::man_server_init($s);
+		@name = qw(Schedule Server Serverman.pm)
 	} else {
 		require Schedule::Client::Scheduleman;
-		$name = &Schedule::Client::Scheduleman::man_schedule_init($s)
+		&Schedule::Client::Scheduleman::man_schedule_init($s);
+		@name = qw(Schedule Client Scheduleman.pm)
 	}
-	$o->{'-input'} = File::Spec->catfile('Schedule', 'Man', $name);
+	$o->{'-input'} = File::Spec->catfile(@name);
 	$o->{'-pathlist'} = \@INC;
 	require Pod::Usage;
 	Pod::Usage::pod2usage($o)

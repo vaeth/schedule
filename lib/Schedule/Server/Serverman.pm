@@ -9,7 +9,7 @@ use strict;
 use warnings;
 use integer;
 
-our $VERSION = '4.0';
+our $VERSION = '4.2';
 
 =head1 NAME
 
@@ -253,8 +253,7 @@ Martin VE<auml>th E<lt>martin@mvath.deE<gt>
 
 sub man_server_init {
 	my ($s) = @_;
-	$s->check_version();
-	'Server.pm'
+	$s->check_version()
 }
 
 'EOF'

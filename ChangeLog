@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-4.2:
+	Martin Väth <martin at mvath.de>:
+	- Fix manpage handling
+
 *schedule-4.1:
 	Martin Väth <martin at mvath.de>:
 	- Fix exit status reporting (regression of schedule-4.0)

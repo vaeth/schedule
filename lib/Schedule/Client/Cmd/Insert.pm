@@ -12,7 +12,7 @@ use integer;
 use Schedule::Client::Args;
 use Schedule::Client::Clientfuncs qw(:FUNCS);
 
-our $VERSION = '4.0';
+our $VERSION = '4.2';
 
 #
 # Functions
