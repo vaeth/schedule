@@ -1,4 +1,4 @@
-#compdef schedule schedule-server
+#compdef schedule schedule-tmux schedule-server
 local curcontext="$curcontext" state state_descr line expl
 typeset -A opt_args
 integer NORMARG
@@ -18,6 +18,8 @@ service_opts=(
 '(--no-color -nocolor -p '{'-F)--color','(--color)-F'}'[force color on non-terminal]'
 '(--color -F '{'--no-color --nocolor)-p','--nocolor -p)--no-color','--no-color -p)--nocolor'}'[non-colored output]'
 '(--daemon -B --detach -E '{'--bg --background)-b','--background -b)--bg','(--bg -b)--background'}'[run main task in background]'
+'*'{'-a+','--alpha='}'[CMD/OPT (alpha-command/option)]:command:_normal'
+{'(--alpha-ignore)-J','(-J)--alpha-ignore'}'[ignore exit status of alpha-command)]'
 '(--bg --background -b --detach -E '{'--daemon)-B','-B)--daemon'}'[run semi-detached in background]'
 '(--bg --background -b --daemon -B '{'--detach)-E','-E)--detach'}'[run detached in background]'
 '*'{'-q','--quiet'}'[be more quiet (accumulative)]'
@@ -43,6 +45,8 @@ case ${service} in
 	service_opts+=(
 {'(--exit)-e+','(-e)--exit='}'[STATUS (set exitstatus)]:exitstatus:(0)'
 {'(--job)-j+','(-j)--job='}'[JOB (set jobnumber)]:jobnumber:(0)'
+'(--immediate -I '{'--ignore)-i+','-i)--ignore='}'[STATUS (force exitstatus)]:exitstatus:(0)'
+'(--ignore -i '{'--immediate)-I+','-I)--immediate='}'[STATUS (report exit immediately)]:exitstatus:(0)'
 '(--no-host --nohost -H '{'--no-user --nouser)-u','--nouser -u)--no-user','--no-user -u)--nouser'}'[Suppress output of user]'
 '(--no-user --nouser -u '{'--no-host --nohost)-H','--nohost -H)--no-host','--no-host -H)--nohost'}'[Suppress output of HOSTTEXT]'
 {'(--no-dir --nodir)-D','(--nodir -D)--no-dir','(--no-dir -D)--nodir'}'[Suppress output of PWD]'
@@ -60,15 +64,19 @@ local ret=$?
 case $state in
 (*cmds)
 	local cmds
-	cmds=(
+	cmds=()
+	[[ $service == *tmux ]] || cmds+=(
 	'help:print a brief help'
 	'man:show extended help as a manpage'
 	)
-	[[ $service == *server ]] || cmds+=(
-	'stop-server:stop schedule-server'
+	[[ $service == *server ]] || {
+		cmds+=(
 	'queue:queue job for later execution'
 	{'s','start'}':queue and run job'
 	{'sq','qs','start-or-queue'}':queue job and run it if the rest is finished'
+	)
+	[[ $service == *tmux ]] || cmds+=(
+	'stop-server:stop schedule-server'
 	'run:start queued job sequentially even if failure'
 	{'x','exec'}':start queued job sequentially until failure'
 	'bg:start queued jobs parallel and return'
@@ -85,6 +93,7 @@ case $state in
 	{'move','shift','insert'}':shift queued jobs in list'
 	'cancel:cancel queued jobs'
 	)
+	}
 	_describe -t commands 'command' cmds
 	ret=$?;;
 (*rest)

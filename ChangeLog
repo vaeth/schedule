@@ -1,5 +1,14 @@
 # ChangeLog for schedule
 
+*schedule-5.0:
+	Martin Väth <martin at mvath.de>:
+	- Provide schedule-tmux script
+	- Provide --alpha, --alpha-ignore, --ignore, --immediate
+	- schedule: fix race with --bg run/exec
+	- schedule-server: fix bugs in permission handling
+	- schedule-server: fix race with --bg/--daemon
+	- schedule-server: close server's socket also in case of error exit
+
 *schedule-4.2:
 	Martin Väth <martin at mvath.de>:
 	- Fix manpage handling

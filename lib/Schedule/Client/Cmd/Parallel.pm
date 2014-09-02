@@ -14,14 +14,18 @@ use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Client::Iterator;
 use Schedule::Client::Runner;
 
-our $VERSION = '4.2';
+our $VERSION = '5.0';
+
+# Global variables:
+
+my $s;
 
 #
 # Functions
 #
 
 sub parallel_init {
-	my $s = &client_globals();
+	$s = &client_globals();
 	$s->check_version();
 	&args_init($s);
 	&iterator_init($s);
@@ -56,6 +60,11 @@ sub parallel {
 	&client_send('close');
 	return '' unless(&closeclient());
 	return 1 unless($waiting);
+	if(!$s->did_alpha()) {
+		my $ret = $s->exec_alpha();
+		exit($ret) if($ret);
+		$s->forking()
+	}
 	for my $id (keys(%unique_ids)) {
 		return '' unless(&runner("wait\c@$id", my $job, my $stat, 1));
 		&set_exitstatus($stat) if(($job ne '0') && $stat)

@@ -63,13 +63,16 @@ you use this project.
    If you enter it while the above command is still running,
    "kernel -f" is not started immediately, but it will be "queued"
    for scheduling in step 5.
-   If you do not want to use a differnt shell for the next step,
+   If you do not want to use a different shell for the next step,
    you use instead
 	schedule --bg sq kernel -f
    which is similar to
 	schedule sq kernel -f &
    but in contrast to the latter will not cause a race condition if
    several such commands are used subsequently in a script.
+   Alternatively, if you are in a tmux session, you can use
+	schedule-tmux sq kernel -f
+   to schedule execution in a new tmux window.
 
 3. In another shell run
 	schedule sq emerge -1O @module-rebuild
@@ -184,6 +187,7 @@ For further details on the various commands and options, use
 
 	schedule man
 	schedule-server man
+	cat -- "$(command -v schedule-tmux)"
 
 
 Security considerations: Encryption and Global vs. Local Servers

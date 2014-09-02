@@ -13,18 +13,25 @@ use File::Spec ();
 use IO::Select ();
 #use Crypt::Rijndael (); # needed for password protection
 #use Digest::SHA ();     # needed for password protection
-#use POSIX (); # needed for --detach
+#use POSIX (); # needed for --detach (and recommended for --bg, --daemon)
 #use Pod::Usage (); # optional, but no manpage or help without this
 
 use Schedule::Helpers qw(:COLOR :IS :SYSQUERY);
 
-our $VERSION = '4.2';
+our $VERSION = '5.0';
+
+# Static variables:
+
+my $have_posix = undef;
 
 sub new {
 	my ($class, $name, $ver) = @_;
 	$0 = $name;
 	my $s = bless({
 		name => $name,
+		alpha => [],
+		alpha_ignore => '',
+		did_alpha => '',
 		daemon => undef,
 		tcp => 1,
 		addr => '127.0.0.1',
@@ -56,6 +63,21 @@ sub name {
 sub daemon {
 	my $s = shift();
 	@_ ? ($s->{daemon} = shift()) : $s->{daemon}
+}
+
+sub alpha {
+	my $s = shift();
+	@_ ? ($s->{alpha} = shift()) : $s->{alpha}
+}
+
+sub did_alpha {
+	my $s = shift();
+	@_ ? ($s->{did_alpha} = shift()) : $s->{did_alpha}
+}
+
+sub alpha_ignore {
+	my $s = shift();
+	@_ ? ($s->{alpha_ignore} = shift()) : $s->{alpha_ignore}
 }
 
 sub tcp {
@@ -222,6 +244,8 @@ sub get_options {
 	'addr|A=s', sub { $s->tcp(1); $s->addr($_[1]) },
 	'file|f=s', sub { $s->tcp(''); $s->file($_[1]) },
 	'timeout|T=i', sub { $s->timeout($_[1]) },
+	'alpha|a=s', $s->alpha(),
+	'alpha-ignore|J', sub { $s->alpha_ignore(1) },
 	'background|bg|b', sub { $s->daemon(0) },
 	'daemon|B', sub { $s->daemon(1) },
 	'detach|E', sub { $s->daemon(-1) },
@@ -256,12 +280,23 @@ sub check_options {
 	my $port = $s->port();
 	$s->fatal("illegal port $port")
 		unless(&is_nonnegative($port) && ($port <= 0xFFFF));
-	if(($s->daemon() // 0) < 0) {
+	my $daemon = $s->daemon();
+	if(defined($daemon) && !defined($have_posix)) {
 		eval {
 			require POSIX
 		};
-		$s->fatal('you might need to install perl module POSIX', $@)
-			if($@)
+		if($@) {
+			my @err=('you might need to install perl module POSIX',
+				$@);
+			if($daemon < 0) {
+				$s->fatal(@err)
+			} else {
+				$s->warning(@err) unless($s->quiet())
+			}
+			$have_posix = ''
+		} else {
+			$have_posix = 1
+		}
 	}
 	return unless(defined($s->password()));
 	eval {
@@ -280,13 +315,46 @@ sub check_options {
 	$s->password($p)
 }
 
+sub exec_alpha() {
+	my $s = shift();
+	$s->did_alpha(1);
+	my $alpha = $s->alpha();
+	return 0 unless(@$alpha);
+	my $sys = system(@$alpha);
+	my $errtext;
+	if($sys < 0) {
+		$errtext = 'alpha-command could not be executed';
+		$sys = 127
+	} elsif($sys & 127) {
+		$errtext = 'alpha-command died with signal ' . ($sys & 127) .
+			(($sys & 128) ? '' : ' (core dumped)');
+		$sys = 127
+	} else {
+		$sys >>= 8;
+		return 0 unless($sys);
+		$errtext = 'alpha-command exited with status ' . $sys
+	}
+	if($s->alpha_ignore()) {
+		$s->warning($errtext) unless($s->quiet());
+		return 0
+	}
+	$s->error($errtext);
+	$sys
+}
+
 sub forking {
 	my $s = shift();
 	return 1 unless(defined(my $d = $s->daemon()));
 	my $pid = fork();
 	$s->error('forking failed; running in foreground')
 		unless(defined($pid));
-	exit(0) if($pid);
+	if($pid) {
+		if($have_posix) {
+			POSIX::_exit(0)
+		} else {
+			exit(0)
+		}
+	}
 	return 1 unless($d);
 	if(($d < 0) && (POSIX::setsid() < 0)) {
 		$s->warning('cannot detach from controlling terminal');

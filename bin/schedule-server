@@ -12,7 +12,7 @@ use File::Spec ();
 #use Getopt::Long ();
 #use IO::Select ();
 #use IO::Socket (); # INET or UNIX, depending on user's choice
-#use POSIX (); # needed for --detach
+#use POSIX (); # needed for --detach (and recommended for --bg, --daemon)
 #use Pod::Usage (); # optional, but no manpage or help without this
 #use Sys::Hostname (); # not mandatory but recommended
 #use Term::ANSIColor (); # not mandatory but recommended: fallback to no color
@@ -27,7 +27,7 @@ if(($FindBin::Bin // '') ne '') {
 use Schedule::Connect ();
 use Schedule::Helpers qw(env_to_array is_nonnegative);
 
-our $VERSION = '4.2';
+our $VERSION = '5.0';
 
 # Global/State variables:
 
@@ -97,7 +97,7 @@ $s->get_options(
 unless($keepgroup) {
 	unless(&is_nonnegative($gid)) {
 		if($group =~ m{^\w+$}) {
-			$gid = getgrnam($user);
+			$gid = getgrnam($group);
 			unless(&is_nonnegative($gid)) {
 				$s->warning("cannot get group id of $group. Falling back to 65534");
 				$gid = 65534
@@ -108,9 +108,9 @@ unless($keepgroup) {
 	}
 	$) = ($gid);
 	$) = $gid if($!);
-	$s->warning("failed to set egid to $gid: $!") if($!);
+	$s->warning('failed to set egid to $gid:', $!) if($!);
 	$( = $gid;
-	$s->warning("failed to set gid to $gid: $!") if($!)
+	$s->warning('failed to set gid to $gid:', $!) if($!)
 }
 
 unless($keepuser) {
@@ -118,7 +118,7 @@ unless($keepuser) {
 		if($user =~ m{^\w+$}) {
 			$uid = getpwnam($user);
 			unless(&is_nonnegative($uid)) {
-				$s->warning("cannot get group id of $group. Falling back to 65534");
+				$s->warning("cannot get user id of $user. Falling back to 65534");
 				$uid = 65534
 			}
 		} else {
@@ -126,9 +126,9 @@ unless($keepuser) {
 		}
 	}
 	$> = $uid;
-	$s->warning("failed to set euid to $uid: $!") if($!);
+	$s->warning("failed to set euid to $uid:", $!) if($!);
 	$< = $uid;
-	$s->warning("failed to set uid to $uid: $!") if($!)
+	$s->warning("failed to set uid to $uid:", $!) if($!)
 }
 
 # Postprocess options:
@@ -142,13 +142,19 @@ $s->usage(2) if(@ARGV);
 # Call main functions:
 
 &prepare_file() unless($s->tcp());
-$s->forking();
 
 require Schedule::Server::Serverfuncs;
 require Schedule::Server::Loop;
 
 Schedule::Server::Serverfuncs->import(qw(:INIT));
+
 &server_init($s);
-exit((&openserver($s) &&
-	&Schedule::Server::Loop::serverloop() &&
-	&closeserver()) ? 0 : 1);
+exit(1) unless(&openserver($s));
+unless($s->did_alpha()) {
+	my $ret = $s->exec_alpha();
+	exit($ret) if($ret);
+	$s->forking()
+}
+my $succ = &Schedule::Server::Loop::serverloop();
+$succ = '' unless(&closeserver());
+exit($succ ? 0 : 1);

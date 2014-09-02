@@ -10,7 +10,7 @@ use warnings;
 use integer;
 use Exporter qw(import);
 
-our $VERSION = '4.2';
+our $VERSION = '5.0';
 
 my @export_is = qw(
 	is_nonnegative

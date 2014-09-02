@@ -9,7 +9,7 @@ use strict;
 use warnings;
 use integer;
 
-our $VERSION = '4.2';
+our $VERSION = '5.0';
 
 =head1 NAME
 
@@ -19,7 +19,7 @@ schedule - queue jobs for later execution and schedule them
 
 =over 8
 
-=item B<schedule> [options] B<queue>|B<start>|B<start-or-queue> I<cmd> [I<args> ...]
+=item B<schedule> [options] B<queue>|B<start>|B<start-or-queue> I<cmd> [I<arg> ...]
 
 =item B<schedule> [options] I<command> [I<jobs> ...]
 
@@ -128,10 +128,10 @@ When both are succesfully finished, B<shutdown -h now> is executed.
 
 =over 8
 
-=item B<queue> I<cmd> [I<args> ... I<args>]
+=item B<queue> I<cmd> [I<arg> ... I<arg>]
 
-Queue I<cmd> I<args> ... I<args> for execution.
-The command will be executed using the shell.
+Queue I<cmd> I<arg> ... I<arg> for execution.
+The command will be executed using perl's system(I<cmd>, I<arg>, ..., I<arg>).
 
 The following environment variables are used for later output with
 B<schedule list>:
@@ -156,12 +156,12 @@ current directory.
 
 =back
 
-=item B<start> I<cmd> [I<args> ... I<args>]
+=item B<start> I<cmd> [I<arg> ... I<arg>]
 
 As B<queue>, but start the command immediately without waiting for a
 further signal through B<schedule>.
 
-=item B<start-or-queue> I<cmd> [I<args> ... I<args>]
+=item B<start-or-queue> I<cmd> [I<arg> ... I<arg>]
 
 Act as B<start> if all jobs specified through the options
 B<--ok>, B<--finished>, B<--started> meet the corresponding requirements;
@@ -390,23 +390,70 @@ I<jobs> can be as in the normal argument list (space-separated).
 If used with B<start-or-queue>, B<ok>, B<finished>, B<started>,
 check whether the listed jobs have been finished with zero exit status.
 
+=item B<--ignore=>I<exitstatus> or B<-i> I<exitstatus>
+
+This option makes only sense if used with (B<queue>, B<start-or-queue>, or
+B<start>): If this option is specified, B<schedule> will report I<exitstatus>
+to the server as the exit status of the command, independent of the actual
+exit status of the command. The exit status of B<schedule> itself is not
+influenced by this option, only what it reports to the server.
+
+Note that the actually reported exit status might still differ
+if a signal is received (see option B<--exit>).
+
+=item B<--immediate=>I<exitstatus> or B<-I> I<exitstatus>
+
+This option makes only sense if used with (B<queue>, B<start-or-queue>, or
+B<start>): If this option is specified, B<schedule> will reported to the server
+that the command exited immediately with I<exitstatus>, even before the
+command was actually started. In this sense, this option implies
+B<--ignore> I<exitstatus>, but causes B<schedule> not only to "lie" to the
+server about the received exit status but even about the actual time of
+exiting.
+
+Note that the actually reported exitstatus might still differ
+if a signal is received (see option B<--exit>).
+
+=item B<--alpha=>I<cmd/arg> or B<-a> I<cmd/arg>
+
+This can be used accumulatively.
+For commands which are expected to be waiting (B<queue>, B<start-or-queue>
+if the condition for immediate start are not satisfied, B<exec>, B<run>,
+B<wait>, B<parallel>), execute perl's system(I<cmd>, I<arg>, ..., I<arg>)
+before the actual waiting begins.
+The purpose is that you can use this to signal e.g. that the command has
+been queued to avoid possible race conditions.
+
+If the I<cmd> does not exit with a zero exit status, also schedule
+is stopped immediately. Use the following option, if you do not want this.
+
+B<schedule-tmux> is a simple shell script which demonstrates how the B<-a>
+option can be used to avoid race conditions when you want to combine
+B<schedule> with B<tmux>, B<screen>, or similar programs.
+Please, view the source code of this script.
+
+=item B<--alpha-ignore> or B<-J>
+
+Ignore any failure in the execution of commands from B<--alpha>.
+(A warning is printed anyway unless the option B<--quiet> is used.)
+
 =item B<--background> or B<--bg> or B<-b>
 
-For commands which are expected to be waiting (B<queue>, B<start-or-queue>
-if the condition for immediate start are not satisfied, B<exec>, B<run>)
+For commands which are expected to be waiting (see B<--alpha>),
 fork into background and return before the actual waiting begins.
 To use this option, your system must know fork(), of course.
 
 This is similar to using the B<&> in a shell, but in contrast to the latter,
 a sequence of such commands does not give a race condition.
 For instance, if you use B<schedule queue command1 & schedule queue command2 &>
-it is partially random whether B<command1> is indeed queued in fron of
+it is partially random whether B<command1> is indeed queued in front of
 B<command1>.
 By using instead B<schedule --bg command1 && schedule --bg command2>
 this cannot happen.
 
-This option is ignored for B<schedule --bg parallel>, since
-B<schedule bg> has a similar effect but does not need to fork.
+Although it is possible to specify B<schedule --bg wait> or
+B<schedule --bg parallel>, this does not make any sense:
+Use instead things like B<schedule ok> or B<schedule bg>, respectively.
 
 =item B<--daemon> or B<-B>
 

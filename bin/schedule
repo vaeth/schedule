@@ -12,7 +12,7 @@ use IO::Socket (); # INET or UNIX, depending on user's choice
 #use Exporter qw(import);
 #use Getopt::Long ();
 #use IO::Select ();
-#use POSIX (); # needed for --detach
+#use POSIX (); # needed for --detach (and recommended for --bg, --daemon)
 #use Pod::Usage (); # optional, but no manpage or help without this
 #use Sys::Hostname (); # not mandatory but recommended
 #use Term::ANSIColor (); # not mandatory but recommended: fallback to no color
@@ -27,7 +27,7 @@ if(($FindBin::Bin // '') ne '') {
 use Schedule::Connect ();
 use Schedule::Helpers qw(env_to_array is_nonnegative join_quoted);
 
-our $VERSION = '4.2';
+our $VERSION = '5.0';
 
 # Global/State variables:
 
@@ -36,6 +36,8 @@ my $s = Schedule::Connect->new('schedule', $VERSION);
 # Default for the Options:
 
 my $cancel = 0;
+my $ignore = undef;
+my $immediate = undef;
 my $nouser = '';
 my $nohost = '';
 my $nodir = '';
@@ -50,7 +52,8 @@ my $tests = [[], [], []];
 
 sub cmd_queue {
 	require Schedule::Client::Cmd::Queue;
-	&Schedule::Client::Cmd::Queue::queue(@_, $destjob, $cancel, $keepdir, $tests)
+	&Schedule::Client::Cmd::Queue::queue(@_,
+		$destjob, $cancel, $ignore, $immediate, $keepdir, $tests)
 }
 
 sub cmd_run {
@@ -124,6 +127,8 @@ $s->get_options(
 	'no-dir|nodir|D', \$nodir,
 	'no-command|nocommand|c', \$nocommand,
 	'keep-dir|keepdir|d', \$keepdir,
+	'ignore|i=i', \$ignore,
+	'immediate|I=i', \$immediate,
 	'job|j=i', \$destjob,
 	'ok|o=s', $tests->[0],
 	'finished|x=s', $tests->[1],

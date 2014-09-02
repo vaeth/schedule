@@ -14,7 +14,7 @@ use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Client::Iterator;
 use Schedule::Client::Runner;
 
-our $VERSION = '4.2';
+our $VERSION = '5.0';
 
 # Global variables:
 
@@ -40,12 +40,11 @@ sub run {
 	my $send = $runmode;
 	$send = 'run' if($runmode eq 'exec');
 	$send .= "\c@";
-	$s->forking();
 	for my $a (@ARGV) {
 		for(my $iter = Schedule::Client::Iterator->new($a, undef, 1);
 			$iter->unfinished(); $iter->increase()) {
 			return '' unless(&runner($send . $iter->current(),
-				my $job, my $status, 1));
+				my $job, my $status, -1));
 			if($job eq '0') {
 				last unless($iter->cond_error());
 				&set_exitstatus(1);

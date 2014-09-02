@@ -9,7 +9,7 @@ use strict;
 use warnings;
 use integer;
 
-our $VERSION = '4.2';
+our $VERSION = '5.0';
 
 =head1 NAME
 
@@ -144,6 +144,22 @@ or B<SCHEDULE_OPTS> if no corresponding file exists.
 This is like B<--passfile>, with the difference that you specify the
 password directly. This option is dangerous, because many systems allow
 other users to see the commandline/environment (hence the password is visible).
+
+=item B<--alpha=>I<cmd/arg> or B<-a> I<cmd/arg>
+
+This can be used accumulatively.
+Immediately after the socket has been established, execute
+perl's system(I<cmd>, I<arg>, ..., I<arg>) before acting on commands.
+The purpose is that you can use this to signal e.g. that the daemon is
+ready to avoid possible race conditions.
+
+If the I<cmd> does not exit with a zero exit status, the server is stopped
+immediately. Use the following option, if you do not want this.
+
+=item B<--alpha-ignore> or B<-J>
+
+Ignore any failure in the execution of commands from B<--alpha>.
+(A warning is printed anyway unless the option B<--quiet> is used.)
 
 =item B<--background> or B<--bg> or B<-b>
 

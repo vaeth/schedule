@@ -14,7 +14,7 @@ use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Helpers qw(:IS :SYSQUERY signals);
 #use Schedule::Client::Testarg;
 
-our $VERSION = '4.2';
+our $VERSION = '5.0';
 
 # Global variables:
 
@@ -22,7 +22,6 @@ my $s;
 
 # Local variables:
 
-my $exitstatus = 0;
 my $unique = undef;
 my $cancel;
 my $destjob;
@@ -38,7 +37,12 @@ sub queue_init {
 
 sub queue {
 	&queue_init();
-	(my $runmode, $destjob, $cancel, my $keepdir, my $tests) = @_;
+	(my $runmode, $destjob, $cancel, my $ignore, my $immediate,
+		my $keepdir, my $tests) = @_;
+	$s->fatal("illegal --ignore $ignore") if(defined($ignore) &&
+		!(&is_nonnegative($ignore) && $ignore <= 0xFF));
+	$s->fatal("illegal --immediate $immediate") if(defined($immediate) &&
+		!(&is_nonnegative($immediate) && $immediate <= 0xFF));
 	my $query = ($runmode eq 'start-or-queue');
 	if($query) {
 		require Schedule::Client::Testarg;
@@ -62,18 +66,30 @@ sub queue {
 	if($unique =~ m{(\d+)$}) {
 		$job .= ' @' . $1
 	}
-	&signals(\&cancel_job);
 	return '' unless($success);
+	&signals(\&cancel_job);
 	if($runmode eq 'queue') {
-		$s->forking();
+		if(!$s->did_alpha()) {
+			my $ret = $s->exec_alpha();
+			if($ret) {
+				$cancel = $ret;
+				&cancel_job()
+			}
+			$s->forking()
+		}
 		&client_recv(my $stat, 0);
 		unless(($stat // '') eq 'run') {
-			$exitstatus = (&is_nonnegative($stat) ? $stat : $cancel);
-			&set_exitstatus($exitstatus);
+			&set_exitstatus(&is_nonnegative($stat) ? $stat :
+				$cancel);
 			return 1
 		}
 	}
 	return '' unless(&closeclient());
+	my $ret;
+	if(defined($immediate)) {
+		$ret = &send_status($immediate);
+		&signals()
+	}
 	my $sys = system(@ARGV);
 	if($sys < 0) {
 		$s->error($job . ' could not be executed') unless($s->quiet());
@@ -87,9 +103,12 @@ sub queue {
 		$sys >>= 8;
 		&jobinfo($job, $sys)
 	}
-	$exitstatus = $sys;
 	&set_exitstatus($sys);
-	&send_status($sys)
+	unless(defined($immediate)) {
+		$ret = &send_status($ignore // $sys);
+		&signals()
+	}
+	$ret
 }
 
 sub jobinfo {
@@ -118,12 +137,13 @@ sub cancel_job {
 		&client_send("cancel\c@$cancel\c@" . ($unique // $destjob)) &&
 		&client_recv(my $reply) &&
 		&client_send('close');
+	&closeclient(1);
 	exit($cancel)
 }
 
 sub send_status {
 	# Sending exitstatus must not cause errors/warnings:
-	&client_send("end\c@$unique\c@$exitstatus") if(&openclient(1));
+	&client_send("end\c@$unique\c@" . $_[0]) if(&openclient(1));
 	&closeclient(1);
 	1
 }
