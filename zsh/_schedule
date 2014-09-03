@@ -13,6 +13,7 @@ service_opts=(
 {'(--timeout)-T+','(-T)--timeout='}'[SECONDS (set timeout)]:seconds:(10)'
 {'(--password)-y+','(-y)--password='}'[PASSWORD (encrypt using PASSWORD)]:password:(p P)'
 '*'{'-Y+','--passfile='}'[FILE (encrypt using password from FILE)]:file:_files'
+'--check[syntax checking for schedule-tmux]'
 '(--local -l '{'--tcp)-t','-t)--tcp'}'[use tcp socket (port)]'
 '(--tcp -t '{'--local)-l','-l)--local'}'[use unix domain socket (file)]'
 '(--no-color -nocolor -p '{'-F)--color','(--color)-F'}'[force color on non-terminal]'
@@ -41,6 +42,11 @@ case ${service} in
 '(--change-permissions -K --user -u --uid -U --group -g --gid -G --no-change-user -n '{'--keep-permissions)-k','-k)--keep-permissions'}'[do not change user/group permissions]'
 '1:command:->cmds'
 );;
+(*tmux)
+	service_opts+=(
+'(--remain -r '{'--no-remain --noremain)-R','--noremain -R)--no-remain','--no-remain -R)--noremain'}'[close window on exit]'
+'(--no-remain --noremain -R '{'--remain)-r','--r)--remain'}'[do not close window on exit]'
+);&
 (*)
 	service_opts+=(
 {'(--exit)-e+','(-e)--exit='}'[STATUS (set exitstatus)]:exitstatus:(0)'
@@ -52,6 +58,11 @@ case ${service} in
 {'(--no-dir --nodir)-D','(--nodir -D)--no-dir','(--no-dir -D)--nodir'}'[Suppress output of PWD]'
 {'(--keep-dir --keepdir)-d','(--keep-dir -d)--keep-dir','(--keep-dir -d)--keepdir'}'[Do not shortcut CWD]'
 {'(--no-command --nocommand)-c','(--nocommand -c)--no-command','(--no-command -c)--nocommand'}'[Suppress output of command]'
+'(--no-title --notitle)--title[Force windows title output]'
+'(--text --title '{'--no-title)--notitle','--notitle)--no-title'}'[Suppress windows title output]'
+'(--no-status --nostatus)--status[Force status line output]'
+'(-text --status '{'--no-status)--nostatus','--nostatus)--no-status'}'[Suppress status line output]'
+'--text=[FORMAT (set status/title text)]:format:("%a (%s) %u@%h%H %c")'
 '*'{'-x+','--finished='}'[have all jobs finished (accumulative)]:job range:(\:)'
 '*'{'-o+','--ok='}'[have all jobs succeeded (accumulative)]:job range:(\:)'
 '*'{'-s+','--started='}'[have all jobs started (accumulative)]:job range:(\:)'
@@ -64,8 +75,7 @@ local ret=$?
 case $state in
 (*cmds)
 	local cmds
-	cmds=()
-	[[ $service == *tmux ]] || cmds+=(
+	cmds=(
 	'help:print a brief help'
 	'man:show extended help as a manpage'
 	)
@@ -89,6 +99,7 @@ case $state in
 	'ok:whether all jobs have finished ok'
 	'finished:whether all jobs have finished'
 	'started:whether all jobs have started'
+	'quote:output further arguments in a quoted form'
 	{'delete','remove'}':remove queued jobs from list'
 	{'move','shift','insert'}':shift queued jobs in list'
 	'cancel:cancel queued jobs'

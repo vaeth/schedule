@@ -13,7 +13,7 @@ use IO::Socket (); # INET or UNIX, depending on user's choice
 
 use Schedule::Helpers qw(:IS join_quoted signals);
 
-our $VERSION = '5.0';
+our $VERSION = '5.1';
 
 my @export_funcs = qw(
 	server_globals

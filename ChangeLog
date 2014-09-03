@@ -1,5 +1,14 @@
 # ChangeLog for schedule
 
+*schedule-5.1:
+	Martin Väth <martin at mvath.de>:
+	- Set status line/windows title. Introduce corresponding options:
+	- --{no-,}status --{no-,}title --text=...
+	- schedule-tmux: support man; error out if unknown command is used
+	- schedule-tmux: support --{no-,}remain and make --remain the default
+	- schedule-tmux is now a POSIX shell script
+	- Provide shell helper "schedule quote"
+
 *schedule-5.0:
 	Martin Väth <martin at mvath.de>:
 	- Provide schedule-tmux script

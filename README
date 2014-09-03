@@ -186,6 +186,7 @@ starts jobs 1 and 5 in parallel and returns. You can wait for their end with
 For further details on the various commands and options, use
 
 	schedule man
+	schedule-tmux man
 	schedule-server man
 	cat -- "$(command -v schedule-tmux)"
 

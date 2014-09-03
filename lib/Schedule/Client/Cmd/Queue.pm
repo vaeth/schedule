@@ -11,10 +11,10 @@ use integer;
 use Cwd ();
 
 use Schedule::Client::Clientfuncs qw(:FUNCS);
-use Schedule::Helpers qw(:IS :SYSQUERY signals);
+use Schedule::Helpers qw(:IS :SYSQUERY signals join_quoted);
 #use Schedule::Client::Testarg;
 
-our $VERSION = '5.0';
+our $VERSION = '5.1';
 
 # Global variables:
 
@@ -35,14 +35,32 @@ sub queue_init {
 	$s->check_version()
 }
 
+{
+	my ($status, $title, $text);
+	my ($user, $host, $hosttext, $cwd, $job);
+	my $jobtext;
 sub queue {
 	&queue_init();
 	(my $runmode, $destjob, $cancel, my $ignore, my $immediate,
-		my $keepdir, my $tests) = @_;
+		my $keepdir, my $tests, $status, $title, $text) = @_;
 	$s->fatal("illegal --ignore $ignore") if(defined($ignore) &&
 		!(&is_nonnegative($ignore) && $ignore <= 0xFF));
 	$s->fatal("illegal --immediate $immediate") if(defined($immediate) &&
 		!(&is_nonnegative($immediate) && $immediate <= 0xFF));
+	if($s->stdout_term()) {
+		my $term = undef;
+		$status //= (($term = ($ENV{'TERM'} // '')) =~
+			m{^(?:xterm|screen|rxvt|aterm|konsole|gnome|Eterm|kterm|interix)});
+		$title //= (($term // $ENV{'TERM'} // '') =~ m{^screen});
+		if($status || $title) {
+			$text //= '%a (%s) %u@%h%H %c'
+		} else {
+			$text = undef
+		}
+	} else {
+		$status = $title = '';
+		$text = undef
+	}
 	my $query = ($runmode eq 'start-or-queue');
 	if($query) {
 		require Schedule::Client::Testarg;
@@ -54,17 +72,22 @@ sub queue {
 	}
 	return '' unless(&openclient());
 	&signals();
-	my $success = &client_send(join("\c@", $runmode, $destjob, &my_user(),
-		&my_hostname(), &my_hosttext(), &my_cwd($keepdir), @ARGV));
+	($user, $host, $hosttext, $cwd) =
+		(&my_user(), &my_hostname, &my_hosttext, &my_cwd($keepdir));
+	my $success = &client_send(join("\c@", $runmode, $destjob, $user,
+		$host, $hosttext, $cwd, @ARGV));
 	$success = '' unless(&client_recv($unique));
 	if($query) {
 		$unique =~ m{^([^\c@]*)\c@(.*)};
 		$runmode = $1;
 		$unique = $2
 	}
-	my $job = 'job';
 	if($unique =~ m{(\d+)$}) {
-		$job .= ' @' . $1
+		$job = '@' . $1;
+		$jobtext = 'job ' . $job
+	} else {
+		$job = '';
+		$jobtext = 'job'
 	}
 	return '' unless($success);
 	&signals(\&cancel_job);
@@ -77,10 +100,12 @@ sub queue {
 			}
 			$s->forking()
 		}
+		&statusbar('waiting');
 		&client_recv(my $stat, 0);
 		unless(($stat // '') eq 'run') {
-			&set_exitstatus(&is_nonnegative($stat) ? $stat :
-				$cancel);
+			$stat = $cancel unless(&is_nonnegative($stat));
+			&statusbar($stat);
+			&set_exitstatus($stat);
 			return 1
 		}
 	}
@@ -90,19 +115,21 @@ sub queue {
 		$ret = &send_status($immediate);
 		&signals()
 	}
+	&statusbar('running');
 	my $sys = system(@ARGV);
 	if($sys < 0) {
-		$s->error($job . ' could not be executed') unless($s->quiet());
+		$s->error($jobtext . ' could not be executed') unless($s->quiet());
 		$sys = 127
 	} elsif($sys & 127) {
-		$s->error($job . ' died with signal ' . ($sys & 127) .
+		$s->error($jobtext . ' died with signal ' . ($sys & 127) .
 			(($sys & 128) ? '' : ' (core dumped)'))
 				unless($s->quiet());
 		$sys = 127
 	} else {
 		$sys >>= 8;
-		&jobinfo($job, $sys)
+		&jobinfo($sys)
 	}
+	&statusbar("$sys");
 	&set_exitstatus($sys);
 	unless(defined($immediate)) {
 		$ret = &send_status($ignore // $sys);
@@ -112,18 +139,18 @@ sub queue {
 }
 
 sub jobinfo {
-	my ($job, $status) = @_;
+	my ($ret) = @_;
 	return if($s->quiet() || !$s->stdout_term());
 	my $name = $s->name();
-	my $stat = $status;
+	my $stat = $ret;
 	if($s->color_stdout()) {
 		$name = $s->incolor(0, $name);
-		$stat = $s->incolor(2, $status) if($status)
+		$stat = $s->incolor(2, $ret) if($ret)
 	}
-	if($status) {
-		print("$name: $job exited with status $stat\n")
+	if($ret) {
+		print("$name: $jobtext exited with status $stat\n")
 	} else {
-		print("$name: $job finished\n")
+		print("$name: $jobtext finished\n")
 	}
 }
 
@@ -132,6 +159,7 @@ sub jobinfo {
 sub cancel_job {
 	&signals();
 	&closeclient(1);
+	&statusbar($cancel);
 	#&send_status($cancel);
 	&openclient(1) &&
 		&client_send("cancel\c@$cancel\c@" . ($unique // $destjob)) &&
@@ -146,6 +174,32 @@ sub send_status {
 	&client_send("end\c@$unique\c@" . $_[0]) if(&openclient(1));
 	&closeclient(1);
 	1
+}
+
+sub statusbar {
+	return unless(defined(my $t = $text));
+	my $stat = shift();
+	my $replace = sub {
+		my ($c) = @_;
+		return '%' if($c eq '%');
+		return $user if($c eq 'u');
+		return $host if($c eq 'h');
+		return ($hosttext eq '') ? '' : "($hosttext)" if($c eq 'H');
+		return $cwd if($c eq 'd');
+		return $job if($c eq 'a');
+		return $stat if($c eq 's');
+		if(($c eq 'c') || ($c eq 'C')) {
+			return &join_quoted($ARGV[0]) if(@ARGV == 1);
+			return $ARGV[0] if($c eq 'c');
+			return &join_quoted(@ARGV)
+		}
+		$c
+	};
+	$t =~ s{\%([asuhHdcC%])}{$replace->($1)}ge;
+	$| = 1;
+	print("\033]0;$t\007") if($status);
+	print("\033k$t\033\\") if($title)
+}
 }
 
 { my $hostname = undef; # a static closure

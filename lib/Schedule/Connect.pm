@@ -18,7 +18,7 @@ use IO::Select ();
 
 use Schedule::Helpers qw(:COLOR :IS :SYSQUERY);
 
-our $VERSION = '5.0';
+our $VERSION = '5.1';
 
 # Static variables:
 
@@ -29,6 +29,7 @@ sub new {
 	$0 = $name;
 	my $s = bless({
 		name => $name,
+		check => '',
 		alpha => [],
 		alpha_ignore => '',
 		did_alpha => '',
@@ -58,6 +59,11 @@ sub version {
 sub name {
 	my $s = shift();
 	$s->{name}
+}
+
+sub check {
+	my $s = shift();
+	@_ ? ($s->{check} = shift()) : $s->{check}
 }
 
 sub daemon {
@@ -207,13 +213,23 @@ sub check_version {
 		if($ver ne $VERSION)
 }
 
+sub check_queue {
+	my $s = shift();
+	$s->usage('only supported: queue, start, start-or-queue, help, man')
+		if($s->check())
+}
+
 sub usage {
 	my $s = shift();
 	my $o = ((scalar(@_) <= 1) ? ($_[0] // 1) : {@_});
 	$o = (&is_nonnegative($o) ? {-exitval => $o} : {-message => $o})
 		unless(ref($o) eq 'HASH');
 	my @name;
-	if(($s->name()) =~ m{serv}i) {
+	if($s->check()) {
+		require Schedule::Client::Tmuxman;
+		&Schedule::Client::Tmuxman::man_tmux_init($s);
+		@name = qw(Schedule Client Tmuxman.pm)
+	} elsif(($s->name()) =~ m{serv}i) {
 		require Schedule::Server::Serverman;
 		&Schedule::Server::Serverman::man_server_init($s);
 		@name = qw(Schedule Server Serverman.pm)
@@ -250,6 +266,7 @@ sub get_options {
 	'daemon|B', sub { $s->daemon(1) },
 	'detach|E', sub { $s->daemon(-1) },
 	'quiet|q+', \$s->{quiet},
+	'check', sub { $s->check(1) },
 	'help|h', sub { $s->usage(1) },
 	'man|?', sub { $s->usage(-verbose => 2) },
 	'version|V', sub { print($s->name(), " $VERSION\n"); exit(0) },

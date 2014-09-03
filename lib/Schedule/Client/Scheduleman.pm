@@ -9,7 +9,7 @@ use strict;
 use warnings;
 use integer;
 
-our $VERSION = '5.0';
+our $VERSION = '5.1';
 
 =head1 NAME
 
@@ -24,6 +24,8 @@ schedule - queue jobs for later execution and schedule them
 =item B<schedule> [options] I<command> [I<jobs> ...]
 
 =item B<schedule> [options] I<stop-server>
+
+=item B<schedule> [options] I<quote> [I<args>]
 
 =back
 
@@ -310,6 +312,11 @@ this will change their exit status. For instance, if job 1 has failed, then
 B<schedule cancel 1> will set its exit status to B<0> so that a subsequent
 B<schedule exec> will "ignore" this job.
 
+=item B<quote> I<args>
+
+Output I<args> in a form appropriate for a POSIX shell eval.
+This is used by the B<schedule-tmux> script.
+
 =back
 
 =head1 OPTIONS
@@ -508,7 +515,60 @@ the queued command.
 
 If this option is specified with B<queue>, B<start>, or B<start-or-queue>,
 the current working directory is not shortcut using the B<HOME>
-environment variable. This influences the later output with B<schedule list>.
+environment variable. This influences the later output with B<schedule list>
+as well as the output of the status line/windows title.
+
+=item B<--no-status> or B<--nostatus>
+
+By default B<queue>, B<start>, or B<start-or-queue> output an appropriate
+status line if B<TERM> appears appropriate for this.
+This option suppresses the output of the status line.
+Note that the windows title might be output independently.
+
+=item B<--no-title> or B<--notitles>
+
+By default B<queue>, B<start>, or B<start-or-queue> output an appropriate
+windows title if B<TERM> appears appropriate for this.
+This option suppresses the output of the windows title.
+Note that the status line might be output independently.
+
+=item B<--status>
+
+If this option is specified with B<queue>, B<start>, or B<start-or-queue>,
+the status line is output even if B<TERM> appears inappropriate for this.
+
+=item B<--title>
+
+If this option is specified with B<queue>, B<start>, or B<start-or-queue>,
+the windowed title is output even if B<TERM> appears inappropriate for this.
+
+=item B<--text=>I<format>
+
+This option specifies the text which is output as the status line or
+windows title.
+The following substitutions are made in I<format>:
+
+=over 16
+
+=item B<%a> is replaced by the job address
+
+=item B<%s> is replaced by the status (B<running>, B<waiting>, or exit value)
+
+=item B<%u> is replaced by the user name
+
+=item B<%h> is replaced by the host name
+
+=item B<%H> is replaced by B<($HOSTTEXT)> if HOSTTEXT is nonemty
+
+=item B<%c> is replaced by the first word of the command
+
+=item B<%C> is replaced by the full command
+
+=item B<%d> is replaced by the current directory
+
+=back
+
+The default I<format> is: B<%a (%s) %u@%h%H %c>
 
 =item B<--exit=>I<exitstatus> or B<-e> I<exitstatus>
 
@@ -539,6 +599,13 @@ Setting the environment variable B<ANSI_COLORS_DISABLED> has the same effect.
 =item B<--quiet> or B<-q> (accumulative)
 
 Be quiet.
+
+=item B<--check>
+
+This enters a special syntax checking mode which is used by B<schedule-tmux>:
+The commands B<queue>, B<start>, or B<start-or-schedule> lead to exiting with
+status 6, B<help> and B<man> refer to a special text for B<schedule-tmux>.
+All other commands lead to an error message.
 
 =item B<--help> or B<-h>
 

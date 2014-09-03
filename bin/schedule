@@ -27,7 +27,7 @@ if(($FindBin::Bin // '') ne '') {
 use Schedule::Connect ();
 use Schedule::Helpers qw(env_to_array is_nonnegative join_quoted);
 
-our $VERSION = '5.0';
+our $VERSION = '5.1';
 
 # Global/State variables:
 
@@ -45,55 +45,73 @@ my $nocommand = '';
 my $keepdir = '';
 my $destjob = 0;
 my $tests = [[], [], []];
+my $status = undef;
+my $title = undef;
+my $text = undef;
 
 #
 # Commands
 #
 
 sub cmd_queue {
+	exit(6) if($s->check());
 	require Schedule::Client::Cmd::Queue;
 	&Schedule::Client::Cmd::Queue::queue(@_,
-		$destjob, $cancel, $ignore, $immediate, $keepdir, $tests)
+		$destjob, $cancel, $ignore, $immediate, $keepdir, $tests,
+		$status, $title, $text)
 }
 
 sub cmd_run {
+	$s->check_queue();
 	require Schedule::Client::Cmd::Run;
 	&Schedule::Client::Cmd::Run::run(@_)
 }
 
 sub cmd_parallel {
+	$s->check_queue();
 	require Schedule::Client::Cmd::Parallel;
 	&Schedule::Client::Cmd::Parallel::parallel(@_)
 }
 
 sub cmd_list {
+	$s->check_queue();
 	require Schedule::Client::Cmd::List;
 	&Schedule::Client::Cmd::List::list(@_, $nouser, $nohost, $nodir, $nocommand)
 }
 
 sub cmd_test {
+	$s->check_queue();
 	require Schedule::Client::Cmd::Test;
 	&Schedule::Client::Cmd::Test::test(@_)
 }
 
 sub cmd_cancel {
+	$s->check_queue();
 	require Schedule::Client::Cmd::Cancel;
 	&Schedule::Client::Cmd::Cancel::cancel($cancel)
 }
 
 sub cmd_remove {
+	$s->check_queue();
 	require Schedule::Client::Cmd::Remove;
 	&Schedule::Client::Cmd::Remove::remove($cancel)
 }
 
 sub cmd_stop_server {
+	$s->check_queue();
 	require Schedule::Client::Cmd::Remove;
 	&Schedule::Client::Cmd::Remove::remove($cancel, 1)
 }
 
 sub cmd_insert {
+	$s->check_queue();
 	require Schedule::Client::Cmd::Insert;
 	&Schedule::Client::Cmd::Insert::insert($destjob)
+}
+
+sub cmd_quote {
+	$s->check_queue();
+	print(&join_quoted(@ARGV), "\n")
 }
 
 #
@@ -118,6 +136,10 @@ if(exists($ENV{'SCHEDULE_OPTS'})) {
 	unshift(@ARGV, &env_to_array('SCHEDULE_OPTS'))
 }
 
+eval {
+	END { $s->did_alpha() || $s->exec_alpha() }
+};
+
 # Parse Options:
 
 $s->get_options(
@@ -129,6 +151,9 @@ $s->get_options(
 	'keep-dir|keepdir|d', \$keepdir,
 	'ignore|i=i', \$ignore,
 	'immediate|I=i', \$immediate,
+	'status!', \$status,
+	'title!', \$title,
+	'text=s', \$text,
 	'job|j=i', \$destjob,
 	'ok|o=s', $tests->[0],
 	'finished|x=s', $tests->[1],
@@ -181,6 +206,8 @@ if($action =~ m{^sto}i) {
 	$ret = &cmd_test($tests, 2)
 } elsif($action =~ m{^(?:i|m|sh)}i) {
 	$ret = &cmd_insert()
+} elsif($action =~ m{^quote$}i) {
+	$ret = &cmd_quote()
 } elsif($action =~ m{q.*s|s.*q}i) {
 	$ret = &cmd_queue('start-or-queue')
 } elsif($action =~ m{^q}i) {

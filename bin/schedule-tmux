@@ -1,10 +1,24 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-# Instead of bash also zsh and probably many other modern shells could be used.
-# However, to avoid trouble with quoting, we require that printf knows
-# the %q specifier which unfortunately is not guaranteed on POSIX shells.
+# Honour a possible first option:
+remain='set-option set-remain-on-exit on ;'
+case $1 in
+--no-remain|--noremain|-R)
+	remain=
+	shift;;
+--remain|-r)
+	shift;;
+esac
+
+# First check whether the command is appropriate and possibly print manpage:
+schedule --check "$@"
+status=$?
+[ $status -eq 6 ] || exit $status
+
+# We quote the arguments, since tmux wants only a shell-escaped parameter:
+cmd=`schedule quote "$@"`
 
 # To avoid a possible race, we setup a task in the background which will wait:
 tmux wait-for $$ &
@@ -12,9 +26,8 @@ tmux wait-for $$ &
 # Now we open a new window in which we output the command and run schedule
 # with a value of -a which will end our waiting task above.
 
-tmux new-window -d "printf '%q ' schedule $(printf '%q ' "$@")
-echo
-schedule -a \"tmux wait-for -S $$\" $(printf '%q ' "$@")"
+tmux $remain new-window -d "schedule quote $cmd
+schedule -a \"tmux wait-for -S $$\" $cmd"
 
 # Now we wait for the end of our above task: When this task finishes,
 # we can be sure that the passed command has been queued.
