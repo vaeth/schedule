@@ -27,7 +27,7 @@ if(($FindBin::Bin // '') ne '') {
 use Schedule::Connect ();
 use Schedule::Helpers qw(env_to_array is_nonnegative join_quoted);
 
-our $VERSION = '5.1';
+our $VERSION = '5.2';
 
 # Global/State variables:
 

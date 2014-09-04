@@ -1,5 +1,10 @@
 # ChangeLog for schedule
 
+*schedule-5.2:
+	Martin Väth <martin at mvath.de>:
+	- schedule-tmux: Use SCHEDULE_REMAIN as the default
+	- fix regression: repeated cancel can change exit status repeatedly
+
 *schedule-5.1:
 	Martin Väth <martin at mvath.de>:
 	- Set status line/windows title. Introduce corresponding options:

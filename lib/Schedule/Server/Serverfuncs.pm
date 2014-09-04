@@ -13,7 +13,7 @@ use IO::Socket (); # INET or UNIX, depending on user's choice
 
 use Schedule::Helpers qw(:IS join_quoted signals);
 
-our $VERSION = '5.1';
+our $VERSION = '5.2';
 
 my @export_funcs = qw(
 	server_globals
@@ -131,7 +131,6 @@ sub send_exit {
 sub send_remove {
 	my ($job, $stat) = @_;
 	return 1 if(defined(&get_status($job)));
-	&set_status($job, $stat);
 	my $ret = 1;
 	my $conn = &get_conn($job);
 	$ret = '' unless($s->conn_send($conn, $stat));

@@ -9,7 +9,7 @@ use strict;
 use warnings;
 use integer;
 
-our $VERSION = '5.1';
+our $VERSION = '5.2';
 
 =head1 NAME
 
@@ -37,7 +37,12 @@ a sequence of these commands is guaranteed to keep the order of schedule.
 All options known to B<schedule> are supported (except B<--alpha>);
 for a complete list, type: B<schedule man>
 
-In addition, one of the following options can be used.
+The variable B<SCHDEULE_REMAIN> decides whether the window remains after exit
+(it does not if the variable is undefined, empty, B<0>, B<false>,
+B<no>, B<off>, etc.)
+
+Alternatively, you can use one of the following options to change this default
+independent of the value of B<SCHEDULE_REMAIN>.
 If one of these options is used, it must necessarily be the first one
 and appear as a separate word.
 
@@ -46,7 +51,6 @@ and appear as a separate word.
 =item B<--remain> or B<-r>
 
 Set remain-after-exit in the new tmux window.
-This is the default.
 
 =item B<--no-remain> or B<noremain> or B<-R>
 

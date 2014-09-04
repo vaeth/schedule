@@ -14,7 +14,7 @@ use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Client::Iterator;
 use Schedule::Helpers qw(is_nonnegative join_quoted my_color);
 
-our $VERSION = '5.1';
+our $VERSION = '5.2';
 
 # Global variables:
 

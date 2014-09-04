@@ -12,7 +12,7 @@ use integer;
 use Schedule::Helpers qw(is_nonnegative);
 use Schedule::Server::Serverfuncs qw(:FUNCS);
 
-our $VERSION = '5.1';
+our $VERSION = '5.2';
 
 # Global variables:
 
@@ -158,6 +158,7 @@ sub loop_cancel() {
 	if($reply ne '0') {
 		my $job = $joblist->[$index];
 		$reply .= "\c@-" unless(&send_remove($job, $stat));
+		&set_status($job, $stat);
 		&send_finish($job, $stat)
 	}
 	$s->conn_send($conn, $reply)

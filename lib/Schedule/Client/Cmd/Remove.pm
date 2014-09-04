@@ -12,7 +12,7 @@ use integer;
 use Schedule::Client::Args;
 use Schedule::Client::Clientfuncs qw(:FUNCS);
 
-our $VERSION = '5.1';
+our $VERSION = '5.2';
 
 # Global variables:
 
