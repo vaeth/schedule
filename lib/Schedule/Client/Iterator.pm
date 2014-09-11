@@ -4,6 +4,7 @@
 # This is part of the schedule project.
 
 package Schedule::Client::Iterator;
+use version 0.77 (); our $VERSION = version->declare('v6.0.0');
 
 use strict;
 use warnings;
@@ -12,8 +13,6 @@ use Exporter qw(import);
 
 use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Helpers qw(is_nonnegative);
-
-our $VERSION = '5.3';
 
 our @EXPORT = qw(
 	iterator_init

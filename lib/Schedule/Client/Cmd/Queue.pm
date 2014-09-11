@@ -4,6 +4,7 @@
 # This is part of the schedule project.
 
 package Schedule::Client::Cmd::Queue;
+use version 0.77 (); our $VERSION = version->declare('v6.0.0');
 
 use strict;
 use warnings;
@@ -13,8 +14,6 @@ use Cwd ();
 use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Helpers qw(:IS :SYSQUERY signals join_quoted);
 #use Schedule::Client::Testarg;
-
-our $VERSION = '5.3';
 
 # Global variables:
 

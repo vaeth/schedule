@@ -1,6 +1,9 @@
 #!/usr/bin/env perl
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
+
+use version 0.77 (); our $VERSION = version->declare('v6.0.0');
+
 use strict;
 use warnings;
 use integer;
@@ -26,8 +29,6 @@ if(($FindBin::Bin // '') ne '') {
 }
 use Schedule::Connect ();
 use Schedule::Helpers qw(env_to_array is_nonnegative);
-
-our $VERSION = '5.3';
 
 # Global/State variables:
 
@@ -75,9 +76,7 @@ if(exists($ENV{'SCHEDULE_SERVER_OPTS'})) {
 	unshift(@ARGV, &env_to_array('SCHEDULE_OPTS'))
 }
 
-eval {
-	END { $s->did_alpha() || $s->exec_alpha() }
-};
+eval "END { $s->did_alpha() || $s->exec_alpha() }";
 
 # Parse Options:
 

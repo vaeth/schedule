@@ -4,6 +4,7 @@
 # This is part of the schedule project.
 
 package Schedule::Client::Cmd::List;
+use version 0.77 (); our $VERSION = version->declare('v6.0.0');
 
 use strict;
 use warnings;
@@ -13,8 +14,6 @@ use Schedule::Client::Args;
 use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Client::Iterator;
 use Schedule::Helpers qw(is_nonnegative join_quoted my_color);
-
-our $VERSION = '5.3';
 
 # Global variables:
 

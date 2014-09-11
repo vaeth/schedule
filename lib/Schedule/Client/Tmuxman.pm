@@ -4,12 +4,11 @@
 # This is part of the schedule project.
 
 package Schedule::Client::Tmuxman;
+use version 0.77 (); our $VERSION = version->declare('v6.0.0');
 
 use strict;
 use warnings;
 use integer;
-
-our $VERSION = '5.3';
 
 =head1 NAME
 

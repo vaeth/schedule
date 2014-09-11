@@ -1,5 +1,11 @@
 # ChangeLog for schedule
 
+*schedule-6.0.0:
+	Martin Väth <martin at mvath.de>:
+	- Pass to dotted-decimal version format and be more permissive
+	- Fix output of error/warning messages
+	- Fix behaviour in too early fatal errors
+
 *schedule-5.3:
 	Martin Väth <martin at mvath.de>:
 	- list: different colors if user = root or $HOSTTEXTSAVE != $HOSTTEXT

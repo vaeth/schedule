@@ -4,6 +4,7 @@
 # This is part of the schedule project.
 
 package Schedule::Client::Cmd::Cancel;
+use version 0.77 (); our $VERSION = version->declare('v6.0.0');
 
 use strict;
 use warnings;
@@ -12,8 +13,6 @@ use integer;
 use Schedule::Client::Args;
 use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Client::Iterator;
-
-our $VERSION = '5.3';
 
 # Global variables:
 

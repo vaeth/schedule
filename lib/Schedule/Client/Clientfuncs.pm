@@ -4,6 +4,7 @@
 # This is part of the schedule project.
 
 package Schedule::Client::Clientfuncs;
+use version 0.77 (); our $VERSION = version->declare('v6.0.0');
 
 use strict;
 use warnings;
@@ -12,8 +13,6 @@ use Exporter qw(import);
 use IO::Socket (); # INET or UNIX, depending on user's choice
 
 use Schedule::Helpers qw(is_nonempty);
-
-our $VERSION = '5.3';
 
 my @export_funcs = qw(
 	client_globals
@@ -79,17 +78,51 @@ sub openclient {
 	my $ver;
 	if(&client_send('version') && &client_recv($ver) &&
 		&is_nonempty($ver)) {
-		unless($ver eq ('schedule-server ' . $s->version())) {
-			$s->error($ver .
-				' does not match schedule ' . $s->version());
-			return ''
-		}
+		&check_server_version($ver) || return ''
 	} else {
 		$s->error('cannot connect to socket');
 		return ''
 	}
 	$checked = 1
 }}
+
+sub check_server_version {
+	my ($v) = @_;
+	unless($v =~ s{^schedule\-server }{}) {
+		$s->error('schedule-server did not send its version');
+		return ''
+	}
+	my $ver = undef;
+	eval {
+		$ver = version->parse($v)
+	};
+	if((!defined($ver)) || $@) {
+		$s->error('schedule-server sent invalid version');
+		return ''
+	}
+	my $m = $s->servermin();
+	if(defined($m) && ($ver < $m)) {
+		$s->error('schedule-server ' . $ver->stringify() .
+			' too old (at least ' .
+			$m->stringify() . ' required)');
+		return ''
+	}
+	$m = $s->serversup();
+	return 1 unless(defined($m));
+	if($s->serversupallowed()) {
+		if($ver > $m) {
+			$s->error('schedule-server ' . $ver->stringify() .
+				' too new (at most ' .
+				$m->stringify() . ' supported)');
+			return ''
+		}
+	} elsif($ver >= $m) {
+		$s->error('schedule-server ' . $ver->stringify() .
+			' too new (must be before ' . $m->stringify() . ')');
+		return ''
+	}
+	1
+}
 
 sub closeclient {
 	return 1 unless(defined($socket));

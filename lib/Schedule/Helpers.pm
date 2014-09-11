@@ -4,13 +4,12 @@
 # This is part of the schedule project.
 
 package Schedule::Helpers;
+use version 0.77 (); our $VERSION = version->declare('v6.0.0');
 
 use strict;
 use warnings;
 use integer;
 use Exporter qw(import);
-
-our $VERSION = '5.3';
 
 my @export_is = qw(
 	is_nonnegative

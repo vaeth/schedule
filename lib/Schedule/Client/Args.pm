@@ -4,6 +4,7 @@
 # This is part of the schedule project.
 
 package Schedule::Client::Args;
+use version 0.77 (); our $VERSION = version->declare('v6.0.0');
 
 use strict;
 use warnings;
@@ -11,8 +12,6 @@ use integer;
 use Exporter qw(import);
 
 use Schedule::Helpers qw(join_quoted);
-
-our $VERSION = '5.3';
 
 our @EXPORT = qw(
 	args_init

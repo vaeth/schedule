@@ -4,6 +4,7 @@
 # This is part of the schedule project.
 
 package Schedule::Connect;
+use version 0.77 (); our $VERSION = version->declare('v6.0.0');
 
 use strict;
 use warnings;
@@ -18,7 +19,34 @@ use IO::Select ();
 
 use Schedule::Helpers qw(:COLOR :IS :SYSQUERY);
 
-our $VERSION = '5.3';
+# The default minimal/maximal/exact accepted versions for the modules/programs.
+# If undefined, no restriction is required;
+
+my $minversion = version->declare('v6.0.0');
+my $maxversion = $VERSION;
+my $extversion = undef;
+
+# The client accepts servers in the followin interval:
+
+my $servermin = $minversion;
+my $serversup = version->declare('v7.0.0');
+my $serversupallowed = '';
+
+# Exceptions overriding the above global rules:
+
+my %minversion = (
+	'Schedule::Connect' => undef
+);
+
+my %maxversion = (
+	'Schedule::Connect' => undef
+);
+
+my %extversion = (
+	'Schedule::Connect' => undef,
+	'schedule' => $VERSION,
+	'schedule-server' => $VERSION
+);
 
 # Static variables:
 
@@ -154,6 +182,18 @@ sub color_stderr {
 		? &use_ansicolor() : '')
 }
 
+sub servermin {
+	$servermin
+}
+
+sub serversup {
+	$serversup
+}
+
+sub serversupallowed {
+	$serversupallowed
+}
+
 sub fatal {
 	&error(@_);
 	exit(1)
@@ -163,24 +203,28 @@ sub error {
 	my $s = shift();
 	my $name = $s->name();
 	my $error = 'error';
+	my $colon = ': ';
+	my $len = length($name) + length($error) + (2 * length($colon));
 	if($s->color_stderr()) {
 		$name = $s->incolor(0, $name);
 		$error = $s->incolor(2, $error)
 	}
-	print(STDERR $name . ': ' . $error . ': ',
-		join("\n" . (' ' x (length($name) + 9)), @_), "\n");
+	print(STDERR $name, $colon, $error, $colon,
+		join("\n" . (' ' x $len), @_), "\n")
 }
 
 sub warning {
 	my $s = shift();
 	my $name = $s->name();
 	my $warning = 'warning';
+	my $colon = ': ';
+	my $len = length($name) + length($warning) + (2 * length($colon));
 	if($s->color_stderr()) {
 		$name = $s->incolor(0, $name);
 		$warning = $s->incolor(2, $warning)
 	}
-	print(STDERR $name . ': ' . $warning . ': ',
-		join("\n" . (' ' x (length($name) + 11)), @_), "\n")
+	print(STDERR $name, $colon, $warning, $colon,
+		join("\n" . (' ' x $len), @_), "\n")
 }
 
 { # some static closures
@@ -209,8 +253,18 @@ sub check_version {
 		no strict 'refs';
 		$ver = ${"$name\::VERSION"}
 	}
-	$s->fatal("$name version $ver differs from Schedule::Connect version $VERSION")
-		if($ver ne $VERSION)
+	my $m = (exists($minversion{$name}) ? $minversion{$name} : $minversion);
+	$s->fatal($name . ' ' . $ver->stringify() .
+		' too old (at least ' . $m->stringify() . ' required)')
+		if(defined($m) && ($ver < $m));
+	$m = (exists($maxversion{$name}) ? $maxversion{$name} : $maxversion);
+	$s->fatal($name . ' ' . $ver->stringify() .
+		' too new (at most ' . $m->stringify() . ' supported)')
+		if(defined($m) && ($ver > $m));
+	$m = (exists($extversion{$name}) ? $extversion{$name} : $extversion);
+	$s->fatal($name . ' ' . $ver->stringify() .
+		' wrong version (' . $m->stringify() . ' required)')
+		if(defined($m) && ($ver != $m))
 }
 
 sub check_queue {
@@ -269,7 +323,8 @@ sub get_options {
 	'check', sub { $s->check(1) },
 	'help|h', sub { $s->usage(1) },
 	'man|?', sub { $s->usage(-verbose => 2) },
-	'version|V', sub { print($s->name(), " $VERSION\n"); exit(0) },
+	'version|V', sub { print($s->name(), ' ', $VERSION->stringify(), "\n");
+		exit(0) },
 	@_) or $s->usage(2);
 	if(@ARGV) {
 		if($ARGV[0] =~ m/^man/i) {

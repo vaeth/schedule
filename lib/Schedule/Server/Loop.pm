@@ -4,6 +4,7 @@
 # This is part of the schedule project.
 
 package Schedule::Server::Loop;
+use version 0.77 (); our $VERSION = version->declare('v6.0.0');
 
 use strict;
 use warnings;
@@ -11,8 +12,6 @@ use integer;
 
 use Schedule::Helpers qw(is_nonnegative);
 use Schedule::Server::Serverfuncs qw(:FUNCS);
-
-our $VERSION = '5.3';
 
 # Global variables:
 

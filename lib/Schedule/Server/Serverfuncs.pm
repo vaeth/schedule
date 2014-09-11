@@ -4,6 +4,7 @@
 # This is part of the schedule project.
 
 package Schedule::Server::Serverfuncs;
+use version 0.77 (); our $VERSION = version->declare('v6.0.0');
 
 use strict;
 use warnings;
@@ -12,8 +13,6 @@ use Exporter qw(import);
 use IO::Socket (); # INET or UNIX, depending on user's choice
 
 use Schedule::Helpers qw(:IS join_quoted signals);
-
-our $VERSION = '5.3';
 
 my @export_funcs = qw(
 	server_globals
