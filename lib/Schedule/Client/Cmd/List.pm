@@ -14,7 +14,7 @@ use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Client::Iterator;
 use Schedule::Helpers qw(is_nonnegative join_quoted my_color);
 
-our $VERSION = '5.2';
+our $VERSION = '5.3';
 
 # Global variables:
 
@@ -32,8 +32,11 @@ my $col_meta = undef;
 my $col_job;
 my $col_addr;
 my $col_user = undef;
-my $col_host;
+my $col_root = undef;
+my $col_host = undef;
+my $col_xhost = undef;
 my $col_dir = undef;
+my $hosttextsave = undef;
 
 #
 # Functions
@@ -179,21 +182,31 @@ sub format_cmd {
 	my $cmd = (($nocommand || !@cmd) ? '' : ' ' . &join_quoted(@cmd));
 	my $nopwd = ($nodir || ($dir eq ''));
 	return $cmd if($nouser && $nopwd);
+	$nohost = 1 if(($hosttext eq '') || $nouser);
+	my $color_user;
+	my $color_xhost = '';
+	my $color_meta = '';
 	if($use_color) {
-		unless($nouser || defined($col_user)) {
-			$col_user = &my_color('yellow');
-			$col_host = &my_color('green')
-		}
-		unless($nopwd || defined($col_dir)) {
-			$col_dir = &my_color('bold green')
+		$color_meta = $col_meta;
+		unless($nohost) {
+			$hosttextsave //= ($ENV{'HOSTTEXTSAVE'} // '');
+			$color_xhost = ((($hosttextsave ne '') &&
+				($hosttextsave ne $hosttext)) ?
+				($col_xhost //= &my_color('red')) : $col_meta)
 		}
 	}
 	my $reply = ($use_color ? (' ' . $col_meta . '[') : ' [');
-	$reply .= ($use_color ? ($col_user . $user . $col_meta . '@' .
-		$col_host . $host . $col_meta) : ($user . '@' . $host)) .
-		(($nohost || ($hosttext eq '')) ? ($nopwd ? '' : ':' )
-		: ('(' . $hosttext . ')')) unless($nouser);
-	$reply .= ($use_color ? ($col_dir . $dir . $col_reset . $col_meta)
+	$reply .= ($use_color ? ((($user eq 'root') ?
+			($col_root //= &my_color('bold cyan')) :
+			($col_user //= &my_color('yellow')))
+			. $user . $col_reset . $col_meta . '@' .
+			($col_host //= &my_color('green')) . $host ) :
+			($user . '@' . $host)) .
+		($nohost? ($nopwd ? '' : ($color_meta . ':')) :
+			($color_xhost . '(' . $hosttext . ')'))
+			unless($nouser);
+	$reply .= ($use_color ? (($col_dir //= &my_color('bold green'))
+		. $dir . $col_reset . $col_meta)
 		: $dir) unless($nopwd);
 	$reply .= ']';
 	$reply .= $col_reset if($use_color);

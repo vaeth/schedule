@@ -62,7 +62,7 @@ case ${service} in
 '(--text --title '{'--no-title)--notitle','--notitle)--no-title'}'[Suppress windows title output]'
 '(--no-status --nostatus)--status[Force status line output]'
 '(-text --status '{'--no-status)--nostatus','--nostatus)--no-status'}'[Suppress status line output]'
-'--text=[FORMAT (set status/title text)]:format:("%a (%s) %u@%h%H %c")'
+'--text=[FORMAT (set status/title text)]:format:("%a (%s) %u@%h%H %c" "%a(%s)%u@%h%H:%c" "%a (%s) %c %u@%h%H %d")'
 '*'{'-x+','--finished='}'[have all jobs finished (accumulative)]:job range:(\:)'
 '*'{'-o+','--ok='}'[have all jobs succeeded (accumulative)]:job range:(\:)'
 '*'{'-s+','--started='}'[have all jobs started (accumulative)]:job range:(\:)'

@@ -12,7 +12,7 @@ use Exporter qw(import);
 
 use Schedule::Helpers qw(join_quoted);
 
-our $VERSION = '5.2';
+our $VERSION = '5.3';
 
 our @EXPORT = qw(
 	args_init

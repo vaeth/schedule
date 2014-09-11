@@ -13,7 +13,7 @@ use Exporter qw(import);
 use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Helpers qw(is_nonnegative);
 
-our $VERSION = '5.2';
+our $VERSION = '5.3';
 
 our @EXPORT = qw(
 	iterator_init

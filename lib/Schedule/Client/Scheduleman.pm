@@ -9,7 +9,7 @@ use strict;
 use warnings;
 use integer;
 
-our $VERSION = '5.2';
+our $VERSION = '5.3';
 
 =head1 NAME
 
@@ -235,6 +235,10 @@ Lists the queued jobs, their addresses, their exit status (or whether
 they are waiting/running, respectively), the user/host/current directory and
 command line of the scheduled commands. The output can be influenced
 by the options B<--no-user>, B<--no-host>, B<--no-dir>, or B<--no-command>.
+The environment variable B<HOSTTEXTSAVE> can influence the color of
+B<HOSTTEXT>: If B<HOSTTEXTSAVE> is nonempty and differs from B<HOSTTEXT>
+then B<HOSTTEXT> is printed in red.
+The color of the user depends on whether the user is root or somebody else.
 
 =item B<status> I<jobs>
 
@@ -568,7 +572,7 @@ The following substitutions are made in I<format>:
 
 =back
 
-The default I<format> is: B<%a (%s) %u@%h%H %c>
+The default I<format> is: B<%a(%s)%u@%h%H:%c>
 
 =item B<--exit=>I<exitstatus> or B<-e> I<exitstatus>
 

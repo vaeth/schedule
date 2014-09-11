@@ -14,7 +14,7 @@ use Schedule::Client::Clientfuncs qw(:FUNCS);
 use Schedule::Helpers qw(:IS :SYSQUERY signals join_quoted);
 #use Schedule::Client::Testarg;
 
-our $VERSION = '5.2';
+our $VERSION = '5.3';
 
 # Global variables:
 
@@ -53,7 +53,7 @@ sub queue {
 			m{^(?:xterm|screen|rxvt|aterm|konsole|gnome|Eterm|kterm|interix)});
 		$title //= (($term // $ENV{'TERM'} // '') =~ m{^screen});
 		if($status || $title) {
-			$text //= '%a (%s) %u@%h%H %c'
+			$text //= '%a(%s)%u@%h%H:%c'
 		} else {
 			$text = undef
 		}

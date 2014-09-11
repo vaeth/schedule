@@ -1,5 +1,10 @@
 # ChangeLog for schedule
 
+*schedule-5.3:
+	Martin Väth <martin at mvath.de>:
+	- list: different colors if user = root or $HOSTTEXTSAVE != $HOSTTEXT
+	- queue: change default --text
+
 *schedule-5.2:
 	Martin Väth <martin at mvath.de>:
 	- schedule-tmux: Use SCHEDULE_REMAIN as the default

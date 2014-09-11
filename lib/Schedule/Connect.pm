@@ -18,7 +18,7 @@ use IO::Select ();
 
 use Schedule::Helpers qw(:COLOR :IS :SYSQUERY);
 
-our $VERSION = '5.2';
+our $VERSION = '5.3';
 
 # Static variables:
 
