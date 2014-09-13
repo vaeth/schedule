@@ -1,6 +1,11 @@
 # ChangeLog for schedule
 
-*schedule-6.0.0:
+*schedule-v6.0.1:
+	Martin Väth <martin at mvath.de>:
+	- Use perl-5.12 package versioning
+	- Require correct minimal versions of perl and its modules
+
+*schedule-v6.0.0:
 	Martin Väth <martin at mvath.de>:
 	- Pass to dotted-decimal version format and be more permissive
 	- Fix output of error/warning messages

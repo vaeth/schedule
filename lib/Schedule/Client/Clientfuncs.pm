@@ -3,14 +3,14 @@
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Client::Clientfuncs;
-use version 0.77 (); our $VERSION = version->declare('v6.0.0');
+require 5.012;
+package Schedule::Client::Clientfuncs v6.0.1;
 
 use strict;
 use warnings;
 use integer;
 use Exporter qw(import);
-use IO::Socket (); # INET or UNIX, depending on user's choice
+use IO::Socket 1.19 (); # INET or UNIX, depending on user's choice
 
 use Schedule::Helpers qw(is_nonempty);
 

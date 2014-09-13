@@ -3,8 +3,8 @@
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Client::Cmd::Parallel;
-use version 0.77 (); our $VERSION = version->declare('v6.0.0');
+require 5.012;
+package Schedule::Client::Cmd::Parallel v6.0.1;
 
 use strict;
 use warnings;

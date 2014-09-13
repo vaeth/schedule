@@ -285,8 +285,8 @@ Requirements
 
 You need a multitasking system with TCP Sockets and/or Unix Domain sockets
 (for usage with -t or -l, respectively). Any Linux flavour will do
-(as will many other operating systems) and any not too ancient version of perl:
-Any full installation of perl (>=5.6) contains most of the required libraries
+(as will many other operating systems) and any >=perl-5.12.
+Any full installation of >=perl-5.12 contains most of the required libraries
 in its core; the list of required perl libraries is found in the beginning
 of the bin/* files.
 
@@ -294,13 +294,13 @@ If you want to use the options --bg or --daemon you need a system which can
 do fork(). If you want to use the options --detach, you additionally need
 a functioning POSIX library in perl.
 
-Additionally, if you want to use encryption, the two perl libraries
+Additionally, if you want to use encryption, the perl module
+
 	Crypt::Rijndael
-	Digest::SHA
-are needed. The latter is contained in more recent installations of
-perl (>=5.9.3), but the former might have to be installed separately from CPAN.
-These libraries are not needed if the --password and --passfile options
-are not used (or if the password file does not exist).
+
+is needed. This module might have to be installed separately from CPAN.
+This module is not needed if the --password and --passfile option
+is not used (or if no password file exists).
 
 
 Installation

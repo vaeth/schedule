@@ -2,7 +2,8 @@
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-use version 0.77 (); our $VERSION = version->declare('v6.0.0');
+require 5.012;
+package ScheduleServer v6.0.1;
 
 use strict;
 use warnings;
@@ -12,13 +13,14 @@ use File::Spec ();
 #use Crypt::Rijndael (); # needed for password protection
 #use Digest::SHA (); # needed for password protection
 #use Exporter qw(import);
-#use Getopt::Long ();
+#use Getopt::Long 2.24 ();
 #use IO::Select ();
-#use IO::Socket (); # INET or UNIX, depending on user's choice
+#use IO::Socket 1.19 (); # INET or UNIX, depending on user's choice
 #use POSIX (); # needed for --detach (and recommended for --bg, --daemon)
 #use Pod::Usage (); # optional, but no manpage or help without this
 #use Sys::Hostname (); # not mandatory but recommended
 #use Term::ANSIColor (); # not mandatory but recommended: fallback to no color
+#use version 0.77 ();
 
 use lib '/usr/share/schedule';
 use FindBin;
@@ -32,6 +34,7 @@ use Schedule::Helpers qw(env_to_array is_nonnegative);
 
 # Global/State variables:
 
+our $VERSION;
 my $s = Schedule::Connect->new('schedule-server', $VERSION);
 
 # Default for the Options:

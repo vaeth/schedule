@@ -3,21 +3,24 @@
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-package Schedule::Connect;
-use version 0.77 (); our $VERSION = version->declare('v6.0.0');
+require 5.012;
+package Schedule::Connect v6.0.1;
 
 use strict;
 use warnings;
 use integer;
-use Getopt::Long ();
+use Getopt::Long 2.24 ();
 use File::Spec ();
 use IO::Select ();
+use version 0.77 ();
 #use Crypt::Rijndael (); # needed for password protection
 #use Digest::SHA ();     # needed for password protection
 #use POSIX (); # needed for --detach (and recommended for --bg, --daemon)
 #use Pod::Usage (); # optional, but no manpage or help without this
 
 use Schedule::Helpers qw(:COLOR :IS :SYSQUERY);
+
+our $VERSION;
 
 # The default minimal/maximal/exact accepted versions for the modules/programs.
 # If undefined, no restriction is required;
@@ -35,6 +38,8 @@ my $serversupallowed = '';
 # Exceptions overriding the above global rules:
 
 my %minversion = (
+	'Schedule::Client::Clientfuncs' => $VERSION,
+	'Schedule::Server::Serverfuncs' => $VERSION,
 	'Schedule::Connect' => undef
 );
 
