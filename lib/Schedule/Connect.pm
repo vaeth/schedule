@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Connect v6.0.1;
+package Schedule::Connect v6.0.2;
 
 use strict;
 use warnings;
@@ -25,21 +25,19 @@ our $VERSION;
 # The default minimal/maximal/exact accepted versions for the modules/programs.
 # If undefined, no restriction is required;
 
-my $minversion = version->declare('v6.0.0');
+my $minversion = $VERSION;
 my $maxversion = $VERSION;
 my $extversion = undef;
 
 # The client accepts servers in the followin interval:
 
-my $servermin = $minversion;
+my $servermin = version->declare('v6.0.0');
 my $serversup = version->declare('v7.0.0');
 my $serversupallowed = '';
 
 # Exceptions overriding the above global rules:
 
 my %minversion = (
-	'Schedule::Client::Clientfuncs' => $VERSION,
-	'Schedule::Server::Serverfuncs' => $VERSION,
 	'Schedule::Connect' => undef
 );
 
@@ -560,4 +558,4 @@ sub unpadding {
 	$_[0] =~ s{17z*$}{}
 }
 
-'EOF'
+1;

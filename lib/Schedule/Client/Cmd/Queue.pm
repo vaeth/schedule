@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Cmd::Queue v6.0.1;
+package Schedule::Client::Cmd::Queue v6.0.2;
 
 use strict;
 use warnings;
@@ -249,4 +249,4 @@ sub my_cwd {
 	$cwd
 }}
 
-'EOF'
+1;

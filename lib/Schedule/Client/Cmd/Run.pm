@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Cmd::Run v6.0.1;
+package Schedule::Client::Cmd::Run v6.0.2;
 
 use strict;
 use warnings;
@@ -95,4 +95,4 @@ sub static_argv {
 	&client_send('close') && &closeclient()
 }
 
-'EOF'
+1;

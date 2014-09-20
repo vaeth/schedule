@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Runner v6.0.1;
+package Schedule::Client::Runner v6.0.2;
 
 use strict;
 use warnings;
@@ -59,4 +59,4 @@ sub runner {
 	((!$wait) || &closeclient()) && $ret
 }
 
-'EOF'
+1;

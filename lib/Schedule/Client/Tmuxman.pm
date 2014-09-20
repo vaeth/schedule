@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Tmuxman v6.0.1;
+package Schedule::Client::Tmuxman v6.0.2;
 
 use strict;
 use warnings;
@@ -72,4 +72,4 @@ sub man_tmux_init {
 	$s->check_version()
 }
 
-'EOF'
+1;

@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Loop v6.0.1;
+package Schedule::Server::Loop v6.0.2;
 
 use strict;
 use warnings;
@@ -230,4 +230,4 @@ sub loop_stop() {
 	$conn->close() && $ret
 }
 
-'EOF'
+1;

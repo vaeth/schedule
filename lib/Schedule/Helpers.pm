@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Helpers v6.0.1;
+package Schedule::Helpers v6.0.2;
 
 use strict;
 use warnings;
@@ -141,4 +141,4 @@ sub env_to_array {
 	&split_quoted($ENV{$_[0]} // '')
 }
 
-'EOF'
+1;

@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Cmd::Insert v6.0.1;
+package Schedule::Client::Cmd::Insert v6.0.2;
 
 use strict;
 use warnings;
@@ -31,4 +31,4 @@ sub insert {
 		&client_send("insert\c@$destjob\c@" . join(' ', @ARGV))
 }
 
-'EOF'
+1;

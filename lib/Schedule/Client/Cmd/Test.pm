@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Cmd::Test v6.0.1;
+package Schedule::Client::Cmd::Test v6.0.2;
 
 use strict;
 use warnings;
@@ -42,4 +42,4 @@ sub test {
 	1
 }
 
-'EOF'
+1;

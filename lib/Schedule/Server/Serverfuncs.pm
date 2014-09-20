@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Serverfuncs v6.0.1;
+package Schedule::Server::Serverfuncs v6.0.2;
 
 use strict;
 use warnings;
@@ -329,4 +329,4 @@ sub push_wait {
 	push(@$wait, $p)
 }
 
-'EOF'
+1;

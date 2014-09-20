@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-v6.0.2:
+	Martin Väth <martin at mvath.de>:
+	- Replace 'EOF' by 1 to avoid stupid new perl warning
+
 *schedule-v6.0.1:
 	Martin Väth <martin at mvath.de>:
 	- Use perl-5.12 package versioning

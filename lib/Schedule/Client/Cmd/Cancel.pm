@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Cmd::Cancel v6.0.1;
+package Schedule::Client::Cmd::Cancel v6.0.2;
 
 use strict;
 use warnings;
@@ -62,4 +62,4 @@ sub cancel {
 	&client_send('close')
 }
 
-'EOF'
+1;

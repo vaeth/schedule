@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Cmd::List v6.0.1;
+package Schedule::Client::Cmd::List v6.0.2;
 
 use strict;
 use warnings;
@@ -212,4 +212,4 @@ sub format_cmd {
 	$reply . $cmd
 }
 
-'EOF'
+1;
