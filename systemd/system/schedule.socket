@@ -1,5 +1,5 @@
 [Unit]
-Description=Server socket to schedule and execute queued jobs
+Description=schedule-server socket, not reliably usable
 
 [Socket]
 ListenStream=127.0.0.1:8471

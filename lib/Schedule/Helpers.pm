@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Helpers v6.0.2;
+package Schedule::Helpers v6.1.0;
 
 use strict;
 use warnings;
@@ -26,6 +26,7 @@ my @export_sysquery = qw(
 );
 
 my @export_rest = qw(
+	nohup
 	signals
 	split_quoted
 	join_quoted
@@ -39,8 +40,14 @@ our %EXPORT_TAGS = (
 	SYSQUERY => [@export_sysquery]
 );
 
+my $nop = sub {1}; # static closure
+
+sub nohup {
+	$SIG{HUP} = $SIG{PIPE} = $SIG{USR1} = $SIG{USR2} = $nop
+}
+
 sub signals {
-	$SIG{INT} = $SIG{HUP} = $SIG{TERM} = ((@_) ? $_[0] : sub {1})
+	$SIG{INT} = $SIG{TERM} = ((@_) ? $_[0] : $nop)
 }
 
 { my $user = undef; # static closure

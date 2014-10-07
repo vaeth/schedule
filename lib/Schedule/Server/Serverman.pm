@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Serverman v6.0.2;
+package Schedule::Server::Serverman v6.1.0;
 
 use strict;
 use warnings;
@@ -43,7 +43,7 @@ like systemd, if available.
 
 It should be completely safe to run this daemon as root, but to limit the
 effect of unforeseen bugs, for security reasons, if the effective user id is 0,
-this daemon tries to change its permissions to user and group "nobody".
+this daemon tries to change its permissions to user and group "schedule".
 If the user/group cannot be found, the id 65534 is used instead.
 
 By default, the daemon uses a TCP socket on a local port for communication.
@@ -217,11 +217,11 @@ independently of how the the user is treated.
 
 =item B<--user=>I<user> or B<-u> I<user>
 
-Drop permissions to user I<user> instead of B<nobody>.
+Drop permissions to user I<user> instead of B<schedule>.
 
 =item B<--group=>I<group> or B<-g> I<group>
 
-Drop permissions to group I<group> instead of B<nobody>.
+Drop permissions to group I<group> instead of B<schedule>.
 
 =item B<--uid=>I<uid> or B<-U> I<uid>
 

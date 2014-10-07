@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Connect v6.0.2;
+package Schedule::Connect v6.1.0;
 
 use strict;
 use warnings;
@@ -25,7 +25,7 @@ our $VERSION;
 # The default minimal/maximal/exact accepted versions for the modules/programs.
 # If undefined, no restriction is required;
 
-my $minversion = $VERSION;
+my $minversion = version->declare('v6.0.2');
 my $maxversion = $VERSION;
 my $extversion = undef;
 
@@ -38,7 +38,9 @@ my $serversupallowed = '';
 # Exceptions overriding the above global rules:
 
 my %minversion = (
-	'Schedule::Connect' => undef
+	'Schedule::Connect' => undef,
+	'Schedule::Helpers' => $VERSION,
+	'Schedule::Server::Serverman' => $VERSION
 );
 
 my %maxversion = (
@@ -339,7 +341,8 @@ sub get_options {
 	# Read password file before dropping permissions
 	for my $passfile (@passfile) {
 		next unless(open(my $fh, '<', $passfile));
-		my $pw = <$fh>;
+		binmode($fh);
+		my $pw = do { local $/; <$fh> }; # slurp!
 		close($fh);
 		chomp($pw);
 		$s->password($pw) if(&is_nonempty($pw))

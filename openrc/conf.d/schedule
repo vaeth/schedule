@@ -1,5 +1,8 @@
 # /etc/conf.d/schedule
 
+schedule_user="schedule"
+schedule_group="schedule"
+
 # Options to pass to schedule-server/schedule at startup/stop
 # The options are eval'ed, so using quoting
 schedule_opts="-Y '/etc/schedule.password'"

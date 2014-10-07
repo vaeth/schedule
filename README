@@ -209,8 +209,10 @@ task of root if root has queued this task before.
 (This is not a built-in "feature" of schedule but due to the nature of the
 unix permission system. In fact, schedule-server needs no permissions at all
 to do its job [except for accessing the TCP socket], and therefore it is
-highly recommended to start it with an unprivileged user like "nobody";
-if started as root, schedule-server will by default change to that user.)
+highly recommended to start it with an unprivileged user/group;
+the suggested and default name for that user/group is "schedule":
+If started as root, schedule-server will by default change to user/group
+"schedule", falling back to "nobody").
 
 Nevertheless, the above is not always desired.
 For instance, in the second example above the attacker might be able
@@ -308,11 +310,12 @@ Installation
 
 If you are a gentoo user, you can just emerge schedule from the mv overlay
 and possibly have to adapt /etc/conf.d/schedule and the systemd service file.
-By default, these contain the options --passfile /etc/schedule.password,
-so you should generate these files with a password (and set permissions to
-your needs) if you want to make use of them.
+By default, these contain the options --passfile /etc/schedule.password
+It is recommended to generate this file with a random password and to
+make it readable only by user/group "schedule": Then you can add all your
+users who should be able to access the default server to the group "schedule".
 
-If your distribution has no package for schedule,you have to copy
+If your distribution has no package for schedule, you have to copy
 bin/* into /usr/bin/ or any other directory of your $PATH.
 
 Moreover, you have to copy lib/ (or its content) into the same directory
@@ -330,10 +333,19 @@ For openrc-support copy then content of openrc to /etc and activate
 the schedule file in the usual way.
 For systemd-support copy systemd/system/schedule.{service,socket} to your
 systemd system folder and activate the service or socket file in the usual way.
+(better do not activate the socket unit, because it does not work reliably;
+if the service unit would not contain a workaround, it would not work reliably,
+either. Both is systemd's fault: Use better a sane init-system if you can.)
 If you copied the main script not to /usr/bin/schedule, you have to modify
 the schedule.service file for systemd correspondingly.
 
 If you use the default openrc/systemd files you should also generate
 /etc/schedule.password (and set corresponding permissions) if you want to
-use encryption. In this case, it is recommended, to export the variables
-from the files in the env.d directory
+use encryption: It is recommended to generate a new user/group "schedule"
+and make /etc/schedule.password be readable only by this user/group,
+adding all users to this group which should be able to use the system wide
+scheduler.
+
+It is recommended to export the variables from the files in the env.d
+directory (or put them into your shell startup code),
+e.g. to use /etc/schedule.password.

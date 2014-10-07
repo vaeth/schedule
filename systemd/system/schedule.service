@@ -1,13 +1,14 @@
 [Unit]
-Description=Server to schedule and execute queued jobs
+Description=system wide schedule-server
 
 [Service]
-User=root
-Group=nobody
-SupplementaryGroups=
+User=schedule
+Group=schedule
 Nice=19
 ExecStart=/usr/bin/schedule-server -Y /etc/schedule.password
-ExecStop=/usr/bin/schedule -Y /etc/schedule.password stop-server
+# ExecStop would be better but for unknown reasons sometimes fails;
+# no surprise with all the random bugs in systemd BS
+#ExecStop=/usr/bin/schedule -Y /etc/schedule.password stop-server
 
 [Install]
 WantedBy=multi-user.target

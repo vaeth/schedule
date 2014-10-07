@@ -1,5 +1,13 @@
 # ChangeLog for schedule
 
+*schedule-v6.1.0:
+	Martin Väth <martin at mvath.de>:
+	- Default user/group is now "schedule"; "nobody" is only a fallback
+	- Slurp the whole password file in binary mode (but chomp()) so that
+	  multiline or binary passwords can be used
+	- Ignore signals HUP, PIPE, USR1, USR2
+	- Work around bugs of the broken systemd
+
 *schedule-v6.0.2:
 	Martin Väth <martin at mvath.de>:
 	- Replace 'EOF' by 1 to avoid stupid new perl warning
