@@ -1,5 +1,12 @@
 # ChangeLog for schedule
 
+*schedule-v6.2.0:
+	Martin Väth <martin at mvath.de>:
+	- Support socket-based activation of (x)inetd/systemd.
+	  Thanks a lot to Christian Mock <cm at tahina.priv.at> for explaining
+	  how to convert a file descriptor into an IO::Socket object
+	- Fix ignoring of signals
+
 *schedule-v6.1.0:
 	Martin Väth <martin at mvath.de>:
 	- Default user/group is now "schedule"; "nobody" is only a fallback

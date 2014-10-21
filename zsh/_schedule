@@ -29,6 +29,7 @@ case ${service} in
 (*server)
 	service_opts+=(
 {'(--skip-check)-S','(-S)--skip-check'}'[skip permission check (dangerous!)]'
+{'(--fd)-d+','(-d)--fd='}'[FD (use filedescriptor FD)]:file descriptor:(0)'
 {'(--umask)-m+','(-m)--umask='}'[UMASK (set UMASK)]:umask:(0077)'
 {'(--user)-u+','(-u)--user='}'[USER (use USER permissions)]:user name:_users'
 {'(--group)-g+','(-g)--group='}'[GROUP (use GROUP permissions)]:group name:_groups'

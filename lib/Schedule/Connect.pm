@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Connect v6.1.0;
+package Schedule::Connect v6.2.0;
 
 use strict;
 use warnings;
@@ -40,7 +40,8 @@ my $serversupallowed = '';
 my %minversion = (
 	'Schedule::Connect' => undef,
 	'Schedule::Helpers' => $VERSION,
-	'Schedule::Server::Serverman' => $VERSION
+	'Schedule::Server::Serverman' => $VERSION,
+	'Schedule::Server::Serverfuncs' => $VERSION
 );
 
 my %maxversion = (

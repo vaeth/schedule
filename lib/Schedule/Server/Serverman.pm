@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Serverman v6.1.0;
+package Schedule::Server::Serverman v6.2.0;
 
 use strict;
 use warnings;
@@ -73,6 +73,13 @@ If B<SCHEDULE_SERVER_OPTS> is undefined, the default is taken from the
 environment variable B<SCHEDULE_OPTS>, according to the same rules.
 
 =over 8
+
+=item B<--fd=>I<Number> or B<-d> I<Number>
+
+Use file descriptor I<Number> as the socket for communication.
+If you want to use the socket-based activation of (x)inetd or systemd,
+use these tools to transfer the socket input to STDIO and use this option
+with I<Number> being B<0>.
 
 =item B<--tcp> or B<-t>
 

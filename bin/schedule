@@ -3,7 +3,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule v6.1.0;
+package Schedule v6.2.0;
 
 use strict;
 use warnings;

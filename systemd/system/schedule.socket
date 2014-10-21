@@ -1,5 +1,5 @@
 [Unit]
-Description=schedule-server socket, not reliably usable
+Description=schedule-server socket
 
 [Socket]
 ListenStream=127.0.0.1:8471

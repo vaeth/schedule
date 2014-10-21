@@ -1,14 +1,23 @@
 [Unit]
 Description=system wide schedule-server
 
+# Use the following line only if you want systemd socket activation:
+Requires=schedule.socket
+
 [Service]
 User=schedule
 Group=schedule
 Nice=19
-ExecStart=/usr/bin/schedule-server -Y /etc/schedule.password
-# ExecStop would be better but for unknown reasons sometimes fails;
-# no surprise with all the random bugs in systemd BS
+# Use the following line only if you want systemd socket activation:
+StandardInput=socket
+# Use option --fd=0 only if you want systemd socket activation:
+ExecStart=/usr/bin/schedule-server -Y /etc/schedule.password --fd=0
+
+# ExecStop would be better but for unknown reasons sometimes fails:
 #ExecStop=/usr/bin/schedule -Y /etc/schedule.password stop-server
+# So we work around this problem:
+# We kill by signal, considering the "killed" exit status a success:
+SuccessExitStatus=130
 
 [Install]
 WantedBy=multi-user.target

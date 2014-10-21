@@ -329,13 +329,10 @@ it is recommended in this case to remove/comment out the lines between
 For zsh completion support also copy zsh/_schedule into a directory of
 your zsh's $fpath.
 
-For openrc-support copy then content of openrc to /etc and activate
+For openrc-support copy the content of openrc to /etc and activate
 the schedule file in the usual way.
 For systemd-support copy systemd/system/schedule.{service,socket} to your
 systemd system folder and activate the service or socket file in the usual way.
-(better do not activate the socket unit, because it does not work reliably;
-if the service unit would not contain a workaround, it would not work reliably,
-either. Both is systemd's fault: Use better a sane init-system if you can.)
 If you copied the main script not to /usr/bin/schedule, you have to modify
 the schedule.service file for systemd correspondingly.
 

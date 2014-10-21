@@ -3,7 +3,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package ScheduleServer v6.1.0;
+package ScheduleServer v6.2.0;
 
 use strict;
 use warnings;
@@ -40,6 +40,7 @@ my $s = Schedule::Connect->new('schedule-server', $VERSION);
 
 # Default for the Options:
 
+my $fd = '';
 my $umask = 0077;
 my $skipcheck = '';
 my $uid = '';
@@ -87,6 +88,7 @@ eval "END { $s->did_alpha() || $s->exec_alpha() }";
 $s->get_options(
 	'umask|m=s', \$umask,
 	'skip-check|S', \$skipcheck,
+	'fd|d=s', \$fd,
 	'uid|U=s', \$uid,
 	'gid|G=s', \$gid,
 	'user|u=s', \$user,
@@ -162,7 +164,7 @@ $s->usage(2) if(@ARGV);
 
 # Call main functions:
 
-&prepare_file() unless($s->tcp());
+&prepare_file() unless($fd || $s->tcp());
 
 require Schedule::Server::Serverfuncs;
 require Schedule::Server::Loop;
@@ -170,7 +172,7 @@ require Schedule::Server::Loop;
 Schedule::Server::Serverfuncs->import(qw(:INIT));
 
 &server_init($s);
-exit(1) unless(&openserver($s));
+exit(1) unless(&openserver($fd));
 unless($s->did_alpha()) {
 	my $ret = $s->exec_alpha();
 	exit($ret) if($ret);

@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Serverfuncs v6.0.2;
+package Schedule::Server::Serverfuncs v6.2.0;
 
 use strict;
 use warnings;
@@ -86,7 +86,7 @@ sub signal_handler {
 	exit(130)
 }
 
-sub openserver {
+sub openserver_standard {
 	$socket = ($s->tcp() ? new IO::Socket::INET(
 		LocalAddr => $s->addr(),
 		LocalPort => $s->port(),
@@ -99,11 +99,25 @@ sub openserver {
 		Listen => IO::Socket::SOMAXCONN(),
 		Reuse => 1
 	));
-	unless(defined($socket)) {
-		$s->fatal('unable to setup socket: ' . $!,
-			($s->tcp() ? () : 'maybe you should remove ' .
-				$s->file()));
-		return ''
+	defined($socket) || $s->fatal('unable to setup socket: ' . $!,
+		($s->tcp() ? () : 'maybe you should remove ' . $s->file()))
+}
+
+sub openserver_fd {
+	$socket = ($s->tcp() ? new IO::Socket::INET() :
+		new IO::Socket::UNIX());
+	$s->fatal('cannot allocate socket: ' . $!) unless(defined($socket));
+	$socket->fdopen($_[0], 'r') ||
+		$s->fatal('cannot open file descriptor ' . $_[0])
+}
+
+sub openserver {
+	my ($fd) = @_;
+	if(&is_nonnegative($fd)) {
+		$s->file(undef);
+		&openserver_fd($fd)
+	} else {
+		&openserver_standard()
 	}
 	&signals(\&signal_handler);
 	1
@@ -112,7 +126,7 @@ sub openserver {
 sub closeserver {
 	my $ret = 1;
 	$ret = '' if(defined($socket) && !($socket->close()));
-	unlink($s->file()) unless($s->tcp() || !(-S $s->file()));
+	unlink($s->file()) unless($s->tcp() || (!defined $s->file()) || !(-S $s->file()));
 	$ret
 }
 
