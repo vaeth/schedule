@@ -3,8 +3,11 @@
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
+# This is the "main" file of the schedule project, containing the
+# common parts of schedule and schedule-server which are always needed
+
 require 5.012;
-package Schedule::Connect v6.2.0;
+package Schedule::Connect v6.2.1;
 
 use strict;
 use warnings;
@@ -20,10 +23,10 @@ use version 0.77 ();
 
 use Schedule::Helpers qw(:COLOR :IS :SYSQUERY);
 
-our $VERSION;
+our $VERSION; # auto-initialized to the version of Schedule::Connect
 
 # The default minimal/maximal/exact accepted versions for the modules/programs.
-# If undefined, no restriction is required;
+# If undefined, no corresponding restriction is required.
 
 my $minversion = version->declare('v6.0.2');
 my $maxversion = $VERSION;
@@ -35,23 +38,37 @@ my $servermin = version->declare('v6.0.0');
 my $serversup = version->declare('v7.0.0');
 my $serversupallowed = '';
 
-# Exceptions overriding the above global rules:
+# Exceptions overriding the above global rules.
+# Each file is referred to by the module name appearing on top of the file.
+# (For files in lib/* this is * without .pm and with / replaced by ::, e.g.
+# this file lib/Schedule/Connect.pm is referred to as Schedule::Connect
+# The files bin/schedule and bin/schedule-server are referred to as
+# Schedule and ScheduleServer).
+# For modules not appearing here, the above defaults apply.
+# If "undefined", no corresponding restriction is required.
+
+my $version620 = version->declare('v6.2.0');
 
 my %minversion = (
-	'Schedule::Connect' => undef,
-	'Schedule::Helpers' => $VERSION,
-	'Schedule::Server::Serverman' => $VERSION,
-	'Schedule::Server::Serverfuncs' => $VERSION
+# temporary:
+	'Schedule' => $version620,
+	'ScheduleServer' => $version620,
+	'Schedule::Client::Clientfuncs' => $VERSION,
+	'Schedule::Helpers' => $version620,
+	'Schedule::Server::Serverman' => $version620,
+	'Schedule::Server::Serverfuncs' => $VERSION,
+# Keep the following always:
+	'Schedule::Connect' => undef
 );
 
 my %maxversion = (
+# Keep the following always:
 	'Schedule::Connect' => undef
 );
 
 my %extversion = (
-	'Schedule::Connect' => undef,
-	'schedule' => $VERSION,
-	'schedule-server' => $VERSION
+# Keep the following always:
+	'Schedule::Connect' => undef
 );
 
 # Static variables:

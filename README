@@ -346,3 +346,21 @@ scheduler.
 It is recommended to export the variables from the files in the env.d
 directory (or put them into your shell startup code),
 e.g. to use /etc/schedule.password.
+
+
+A note on versioning of this project
+====================================
+
+This project consists of many files, but not every file changes in every
+release. Therefore, every file can have a different version number
+(which can be found after the "package" keyword near the beginning).
+
+By definition, the version number of the project is that of the "main" file
+lib/Schedule/Connect.pm (module Schedule::Connect).
+This file contains also information which other minimal/maximal/exact
+versions of files belong to that project version - this is specified
+near the beginning of lib/Schedule/Connect.pm
+
+Auxiliary files in zsh, openrc, zsh, env.d, and bin/schedule-tmux
+carry no explicit version number; their version number is implicit
+that of the project (lib/Schedule/Connect.pm).

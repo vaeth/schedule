@@ -1,5 +1,10 @@
 # ChangeLog for schedule
 
+*schedule-v6.2.1:
+	Martin Väth <martin at mvath.de>:
+	- Use only recommonded obj-syntax (no new ...)
+	- Document versioning and that lib/Schedule/Connect.pm is version file
+
 *schedule-v6.2.0:
 	Martin Väth <martin at mvath.de>:
 	- Support socket-based activation of (x)inetd/systemd.

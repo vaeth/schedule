@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Serverfuncs v6.2.0;
+package Schedule::Server::Serverfuncs v6.2.1;
 
 use strict;
 use warnings;
@@ -87,13 +87,13 @@ sub signal_handler {
 }
 
 sub openserver_standard {
-	$socket = ($s->tcp() ? new IO::Socket::INET(
+	$socket = ($s->tcp() ? IO::Socket::INET->new(
 		LocalAddr => $s->addr(),
 		LocalPort => $s->port(),
 		Type => IO::Socket::SOCK_STREAM(),
 		Listen => IO::Socket::SOMAXCONN(),
 		Reuse => 1
-	) : new IO::Socket::UNIX(
+	) : IO::Socket::UNIX->new(
 		Local => $s->file(),
 		Type => IO::Socket::SOCK_STREAM(),
 		Listen => IO::Socket::SOMAXCONN(),
@@ -104,8 +104,8 @@ sub openserver_standard {
 }
 
 sub openserver_fd {
-	$socket = ($s->tcp() ? new IO::Socket::INET() :
-		new IO::Socket::UNIX());
+	$socket = ($s->tcp() ? IO::Socket::INET->new() :
+		IO::Socket::UNIX->new());
 	$s->fatal('cannot allocate socket: ' . $!) unless(defined($socket));
 	$socket->fdopen($_[0], 'r') ||
 		$s->fatal('cannot open file descriptor ' . $_[0])

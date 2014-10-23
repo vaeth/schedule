@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Clientfuncs v6.0.2;
+package Schedule::Client::Clientfuncs v6.2.1;
 
 use strict;
 use warnings;
@@ -59,11 +59,11 @@ sub client_globals {
 { # A static variable:
 	my $checked = '';
 sub openclient {
-	$socket = ($s->tcp() ? new IO::Socket::INET(
+	$socket = ($s->tcp() ? IO::Socket::INET->new(
 		PeerAddr => $s->addr(),
 		PeerPort => $s->port(),
 		Type => IO::Socket::SOCK_STREAM()
-	) : new IO::Socket::UNIX(
+	) : IO::Socket::UNIX->new(
 		Peer => $s->file(),
 		Type => IO::Socket::SOCK_STREAM()
 	));
