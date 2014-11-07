@@ -3,7 +3,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule v6.2.0;
+package Schedule v6.3.0;
 
 use strict;
 use warnings;
@@ -53,6 +53,9 @@ my $tests = [[], [], []];
 my $status = undef;
 my $title = undef;
 my $text = undef;
+my $qtime = '%T';
+my $stime = '%T->';
+my $etime = '->%T %d.%m.%y';
 
 #
 # Commands
@@ -81,7 +84,9 @@ sub cmd_parallel {
 sub cmd_list {
 	$s->check_queue();
 	require Schedule::Client::Cmd::List;
-	&Schedule::Client::Cmd::List::list(@_, $nouser, $nohost, $nodir, $nocommand)
+	&Schedule::Client::Cmd::List::list(@_,
+		$nouser, $nohost, $nodir, $nocommand,
+		$qtime, $stime, $etime)
 }
 
 sub cmd_test {
@@ -157,6 +162,13 @@ $s->get_options(
 	'status!', \$status,
 	'title!', \$title,
 	'text=s', \$text,
+	'qtime=s', \$qtime,
+	'stime=s', \$stime,
+	'etime=s', \$etime,
+	'no-qtime|noqtime', sub { $qtime = '' },
+	'no-stime|nostime', sub { $stime = '' },
+	'no-etime|noetime', sub { $etime = '' },
+	'no-time|notime|n', sub { $qtime = $stime = $etime = '' },
 	'job|j=i', \$destjob,
 	'ok|o=s', $tests->[0],
 	'finished|x=s', $tests->[1],

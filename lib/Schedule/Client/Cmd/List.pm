@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Cmd::List v6.0.2;
+package Schedule::Client::Cmd::List v6.3.0;
 
 use strict;
 use warnings;
@@ -50,7 +50,7 @@ sub list_init {
 
 sub list {
 	&list_init();
-	my ($type, $nouser, $nohost, $nodir, $nocommand) = @_;
+	my ($type, $nouser, $nohost, $nodir, $nocommand, @timeformat) = @_;
 	&validate_args();
 	my $last = undef;
 	my $is_open = '';
@@ -69,6 +69,7 @@ sub list {
 			my $job = $1;
 			my ($addr, $stat, $found);
 			my $quiet = ($s->quiet());
+			my @times = ();
 			if($job eq '0') {
 				$found = '';
 				my $no_error = (($type eq 'number') ||
@@ -88,7 +89,11 @@ sub list {
 					$stat = $reply
 				} else {
 					$reply =~ s{^([^\c@]*)\c@?}{};
-					$stat = ($1 // '')
+					$stat = ($1 // '');
+					for(my $i = 0; $i < 3; ++$i) {
+						$reply =~ s{^([^\c@]*)\c@?}{};
+						push(@times, &format_time($timeformat[$i], $1))
+					}
 				}
 				if($quiet) {
 					&set_exitstatus($stat) if($stat &&
@@ -157,14 +162,15 @@ sub list {
 			my $addrspace = ((length($addr) < 4) ?
 				(' ' x (4 - length($addr))) : '');
 			my $cmd = &format_cmd(1, $reply, $nouser, $nohost, $nodir, $nocommand);
+			my $times = &format_times($use_color, @times);
 			if($use_color) {
 				print($jobspace, $col_job, $job, $reset,
 				$addrspace, $col_addr, $addr, $reset,
 				$statspace, $col_meta, '(', $stat,
-				$col_meta, ')', $reset, $cmd, "\n")
+				$col_meta, ')', $reset, $cmd, $times, "\n")
 			} else {
 				print($jobspace, $job, $addrspace, $addr,
-				$statspace, '(', $stat, ')', $cmd, "\n")
+				$statspace, '(', $stat, ')', $cmd, $times, "\n")
 			}
 		}
 	}
@@ -210,6 +216,63 @@ sub format_cmd {
 	$reply .= ']';
 	$reply .= $col_reset if($use_color);
 	$reply . $cmd
+}
+
+# In case $use_color, the variables $col_reset, $col_meta are expected.
+
+sub format_times {
+	my $use_color = shift();
+	my $ret = '';
+	for(; @_; shift()) {
+		next if($_[0] eq '');
+		if($ret eq '') {
+			$ret = ($use_color ? (' ' . $col_meta . '[' . $col_reset)
+				: ' [')
+		} else {
+			$ret .= ($use_color ? ($col_meta . ',' . $col_reset . ' ')
+				: ', ')
+		}
+		$ret .= $_[0]
+	}
+	($ret eq '') ? '' :
+		($use_color ? ($ret . $col_meta . ']' . $col_reset) : ']')
+}
+
+sub twodigit {
+	my ($digit) = @_;
+	($digit < 10 ? ('0' . "$digit") : "$digit")
+}
+
+sub format_time {
+	my ($format, $time) = @_;
+	return '' if((($format // '') eq '') ||
+		(!&is_nonnegative($time)) || ($time eq 0));
+	my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday) =
+		localtime($time);
+	my $replace = sub {
+		my ($c) = @_;
+		return &twodigit($hour) . ':' . &twodigit($min) . ':' . &twodigit($sec)
+			if($c eq 'T');
+		return &twodigit($hour) . ':' . &twodigit($min) . ':' . &twodigit($sec)
+			if($c eq 'R');
+		return &twodigit($sec) if($c eq 'S');
+		return &twodigit($min) if($c eq 'M');
+		return &twodigit($hour) if($c eq 'H');
+		return &twodigit($mday) if($c eq 'd');
+		return &twodigit($mon + 1) if($c eq 'm');
+		return &twodigit($year % 100) if($c eq 'y');
+		return $year if($c eq 'Y');
+		return ($wday ? $wday : 7) if($c eq 'u');
+		return $wday if($c eq 'w');
+		if($c eq 'j') {
+			++$yday;
+			return ($yday < 100 ? ('0' . &twodigit($yday)) : "$yday")
+		}
+		return $time if($c eq 's');
+		$c
+	};
+	$format =~ s{\%([TRSMHdmyYuwjs\%])}{$replace->($1)}ge;
+	$format
 }
 
 1;

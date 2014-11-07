@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Cmd::Queue v6.0.2;
+package Schedule::Client::Cmd::Queue v6.3.0;
 
 use strict;
 use warnings;
@@ -180,7 +180,6 @@ sub statusbar {
 	my $stat = shift();
 	my $replace = sub {
 		my ($c) = @_;
-		return '%' if($c eq '%');
 		return $user if($c eq 'u');
 		return $host if($c eq 'h');
 		return ($hosttext eq '') ? '' : "($hosttext)" if($c eq 'H');
@@ -194,7 +193,7 @@ sub statusbar {
 		}
 		$c
 	};
-	$t =~ s{\%([asuhHdcC%])}{$replace->($1)}ge;
+	$t =~ s{\%([asuhHdcC\%])}{$replace->($1)}ge;
 	$| = 1;
 	print("\033]0;$t\007") if($status);
 	print("\033k$t\033\\") if($title)

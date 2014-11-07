@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Loop v6.0.2;
+package Schedule::Server::Loop v6.3.0;
 
 use strict;
 use warnings;
@@ -34,7 +34,7 @@ my $conn;
 # Functions
 #
 
-sub loop_init() {
+sub loop_init {
 	($s, $socket, $joblist) = &server_globals();
 	$s->check_version()
 }
@@ -136,11 +136,11 @@ sub loop_bgjob {
 	my $stat = &get_status($job);
 	return $stat if(defined($stat) || ($check_only // ''));
 	&set_status($job, '');
-	$s->conn_send(&get_conn($job), 'run');
+	&send_run($job);
 	''
 }
 
-sub loop_end() {
+sub loop_end {
 	$data =~ s{^([^\c@]*)\c@?}{};
 	my $j = &job_from_unique($1);
 	return unless(defined($j));
@@ -149,7 +149,7 @@ sub loop_end() {
 	&send_finish($j, $stat)
 }
 
-sub loop_cancel() {
+sub loop_cancel {
 	$data =~ s{^(\d+)\c@?}{};
 	my $stat = ($1 // 0);
 	my $index = &my_index($data);
@@ -163,24 +163,29 @@ sub loop_cancel() {
 	$s->conn_send($conn, $reply)
 }
 
-sub loop_list() {
+sub loop_list {
 	my $i = &my_index($data);
 	my $reply = &indexname($i);
 	if($reply ne '0') {
 		my $job = $joblist->[$i];
 		$reply .= "\c@\@" . &get_unique($job);
 		$reply .= "\c@" . (&get_status($job) // '-');
-		$reply .= "\c@" . &get_cmd($job) if($cmd eq 'list')
+		if($cmd eq 'list') {
+			$reply .= "\c@" . &get_qtime($job) .
+				"\c@" . &get_stime($job) .
+				"\c@" . &get_etime($job) .
+				"\c@" . &get_cmd($job)
+		}
 	}
 	$s->conn_send($conn, $reply)
 }
 
-sub loop_tests() {
+sub loop_tests {
 	$data =~ m{$have_re};
 	$s->conn_send($conn, &test_jobs($1, $2, $3))
 }
 
-sub loop_insert() {
+sub loop_insert {
 	$data =~ s{([^\c@]*)\c@?}{};
 	my $index = &my_index($1, 1);
 	return unless(defined($index));
@@ -202,7 +207,7 @@ sub loop_insert() {
 	push(@$joblist, @insert)
 }
 
-sub loop_remove() {
+sub loop_remove {
 	$data =~ s{^(\d+)\c@?}{};
 	my $stat = ($1 // 0);
 	my @fail = ();
@@ -221,7 +226,7 @@ sub loop_remove() {
 	$s->conn_send($conn, join("\c@", @fail, '-'))
 }
 
-sub loop_stop() {
+sub loop_stop {
 	$data =~ m{^(\d+)};
 	my $stat = ($1 // 0);
 	my @fail = &send_exit($stat);

@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Serverfuncs v6.2.1;
+package Schedule::Server::Serverfuncs v6.3.0;
 
 use strict;
 use warnings;
@@ -20,6 +20,7 @@ my @export_funcs = qw(
 	send_exit
 	send_remove
 	send_finish
+	send_run
 	test_jobs
 	job_from_unique
 	unique_indices
@@ -31,6 +32,9 @@ my @export_funcs = qw(
 	get_status
 	set_status
 	get_unique
+	get_qtime
+	get_stime
+	get_etime
 	push_wait
 );
 
@@ -152,10 +156,17 @@ sub send_remove {
 
 sub send_finish {
 	my ($job, $stat) = @_;
+	&set_etime($job);
 	while(defined(my $conn = &shift_wait($job))) {
 		$s->conn_send($conn, $stat);
 		close($conn)
 	}
+}
+
+sub send_run {
+	my ($job) = @_;
+	&set_stime($job);
+	$s->conn_send(&get_conn($job), 'run');
 }
 
 # return whether all jobs are ok, finished, started
@@ -309,7 +320,9 @@ sub my_index {
 
 sub new_job {
 	my ($conn, $data, $stat) = @_;
-	[$conn, $data, $stat, ++$unique, []]
+	my $time = time();
+	[$conn, $data, $stat, ++$unique, [],
+		$time, (defined($stat) ? $time : ''), '']
 }
 
 sub get_conn {
@@ -341,6 +354,26 @@ sub push_wait {
 	my ($j, $p) = @_;
 	my $wait = $j->[4];
 	push(@$wait, $p)
+}
+
+sub get_qtime {
+	$_[0]->[5]
+}
+
+sub get_stime {
+	$_[0]->[6]
+}
+
+sub set_stime {
+	$_[0]->[6] = time()
+}
+
+sub get_etime {
+	$_[0]->[7]
+}
+
+sub set_etime {
+	$_[0]->[7] = time() unless($_[0]->[7] ne '')
 }
 
 1;

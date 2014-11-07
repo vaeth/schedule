@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Scheduleman v6.0.2;
+package Schedule::Client::Scheduleman v6.3.0;
 
 use strict;
 use warnings;
@@ -569,6 +569,8 @@ The following substitutions are made in I<format>:
 
 =item B<%d> is replaced by the current directory
 
+=item B<%%> a literal %
+
 =back
 
 The default I<format> is: B<%a(%s)%u@%h%H:%c>
@@ -589,6 +591,74 @@ B<cancel> always sets the I<exitstatus> of the canceled job(s) in the queue
 (independently of whether I<exitstatus> is zero or not).
 
 The default value of I<exitstatus> is B<0>.
+
+=item B<--qtime=>I<format>
+
+When used with B<schedule list>, this specifies the format in which the
+queueing time of the job is output. The format understands a subset of
+the B<strftime()> options:
+
+=over 16
+
+=item B<%T> is the time in the format HH:MM:SS
+
+=item B<%R> is the time in the format HH:MM
+
+=item B<%S> is the number of seconds (00..59)
+
+=item B<%M> is the minute (00..59)
+
+=item B<%H> is the hour (00..23)
+
+=item B<%d> is the day of the month (01..31)
+
+=item B<%m> is the month (01..12)
+
+=item B<%y> is the year without century (00..99)
+
+=item B<%Y> is the year
+
+=item B<%u> is the day of the week (1..7, 1=Monday)
+
+=item B<%w> is the day of the week (0..6, 0=Sunday)
+
+=item B<%j> is the day of the year (001..366)
+
+=item B<%s> is the number of seconds since Epoch
+
+=item B<%%> a literal %
+
+=back
+
+The default I<format> is: B<%T>
+
+=item B<--stime=>I<format>
+
+As B<--qtime> but corresponds to the starting time.
+
+The default I<format> is: B<%T-E<gt>>
+
+=item B<--etime=>I<format>
+
+As B<--qtime> but corresponds to the end/cancel time.
+
+The default I<format> is: B<-E<gt>%T %d.%m.%y>
+
+=item B<--no-qtime> or B<--noqtime>
+
+No queue time output; shortcut for B<--qtime=>
+
+=item B<--no-stime> or B<--nostime>
+
+No start time output; shortcut for B<--stime=>
+
+=item B<--no-etime> or B<--noetime>
+
+No end time output; shortcut for B<--etime=>
+
+=item B<--no-time> or B<--notime> or B<-n>
+
+No time output; shortcut for B<--no-qtime> B<--no-stime> B<--no-etime>.
 
 =item B<--color> or B<-F>
 

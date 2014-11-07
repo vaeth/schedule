@@ -1,8 +1,14 @@
 # ChangeLog for schedule
 
+*schedule-v6.3.0:
+	Martin Väth <martin at mvath.de>:
+	- Record and output queue/start/end time (with corresponding options)
+	- internal: remove wrong prototypes in function definitions
+	- internal: slightly simplify --text parsing
+
 *schedule-v6.2.1:
 	Martin Väth <martin at mvath.de>:
-	- Use only recommonded obj-syntax (no new ...)
+	- Use only recommended obj-syntax (no new ...)
 	- Document versioning and that lib/Schedule/Connect.pm is version file
 
 *schedule-v6.2.0:
