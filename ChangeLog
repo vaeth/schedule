@@ -1,5 +1,10 @@
 # ChangeLog for schedule
 
+*schedule-v6.3.1:
+	Martin Väth <martin at mvath.de>:
+	- Change --qtime default to %R (no seconds)
+	- Use gnu_getopt
+
 *schedule-v6.3.0:
 	Martin Väth <martin at mvath.de>:
 	- Record and output queue/start/end time (with corresponding options)

@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Scheduleman v6.3.0;
+package Schedule::Client::Scheduleman v6.3.1;
 
 use strict;
 use warnings;
@@ -630,7 +630,7 @@ the B<strftime()> options:
 
 =back
 
-The default I<format> is: B<%T>
+The default I<format> is: B<%R>
 
 =item B<--stime=>I<format>
 
