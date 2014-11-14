@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Serverman v6.2.0;
+package Schedule::Server::Serverman v7.0.0;
 
 use strict;
 use warnings;
@@ -80,6 +80,22 @@ Use file descriptor I<Number> as the socket for communication.
 If you want to use the socket-based activation of (x)inetd or systemd,
 use these tools to transfer the socket input to STDIO and use this option
 with I<Number> being B<0>.
+
+=item B<--syslog>
+
+Describe all nontrivial actions with B<syslog>.
+Note that this is not a substitute for reading stderr:
+The first message is only written when the server is opened.
+
+=item B<--logfile=>I<FILE>
+
+Append all nontrivial actions to file B<FILE>.
+These are the same messages as with B<--syslog>, but can be used
+alternatively or in addition.
+
+=item B<--Logfile=>I<FILE>
+
+As B<--logfile=>I<FILE>, but truncate (clobber) B<FILE> when opening.
 
 =item B<--tcp> or B<-t>
 

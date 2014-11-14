@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Serverfuncs v6.3.0;
+package Schedule::Server::Serverfuncs v7.0.0;
 
 use strict;
 use warnings;
@@ -55,6 +55,7 @@ our %EXPORT_TAGS = (
 my $s;
 my $socket = undef;
 my $joblist = [];
+my $log;
 
 # Static variables:
 
@@ -75,6 +76,7 @@ sub server_init {
 }
 
 sub server_globals {
+	($log) = @_;
 	($s, $socket, $joblist)
 }
 
@@ -84,9 +86,11 @@ sub form_unique {
 
 sub signal_handler {
 	&signals();
+	$log->log('info', 'stop-signal') if(defined($log));
 	&send_exit(7);
 	&closeserver();
 	unlink($s->file()) unless($s->tcp());
+	$log->log('info', 'exit (130)') if(defined($log));
 	exit(130)
 }
 

@@ -7,7 +7,7 @@
 # common parts of schedule and schedule-server which are always needed
 
 require 5.012;
-package Schedule::Connect v6.3.1;
+package Schedule::Connect v7.0.0;
 
 use strict;
 use warnings;
@@ -25,21 +25,17 @@ use Schedule::Helpers qw(:COLOR :IS :SYSQUERY);
 
 our $VERSION; # auto-initialized to the version of Schedule::Connect
 
-my $version620 = version->declare('v6.2.0');
-my $version621 = version->declare('v6.2.1');
-my $version630 = version->declare('v6.3.0');
-
 # The default minimal/maximal/exact accepted versions for the modules/programs.
 # If undefined, no corresponding restriction is required.
 
-my $minversion = version->declare('v6.0.2');
+my $minversion = version->declare('v7.0.0');
 my $maxversion = $VERSION;
 my $extversion = undef;
 
 # The client accepts servers in the followin interval:
 
-my $servermin = $version630;
-my $serversup = version->declare('v7.0.0');
+my $servermin = $minversion;
+my $serversup = version->declare('v8.0.0');
 my $serversupallowed = '';
 
 # Exceptions overriding the above global rules.
@@ -53,16 +49,7 @@ my $serversupallowed = '';
 
 my %minversion = (
 # temporary:
-	'Schedule' => $VERSION,
-	'ScheduleServer' => $version620,
-	'Schedule::Client::Clientfuncs' => $version621,
-	'Schedule::Client::Cmd::List' => $version630,
-	'Schedule::Client::Cmd::Queue' => $version630,
-	'Schedule::Client::Scheduleman' => $VERSION,
-	'Schedule::Helpers' => $version620,
-	'Schedule::Server::Loop' => $version630,
-	'Schedule::Server::Serverfuncs' => $version630,
-	'Schedule::Server::Serverman' => $version620,
+
 # Keep the following always:
 	'Schedule::Connect' => undef
 );
@@ -331,7 +318,13 @@ sub get_options {
 	my $s = shift();
 	my @passfile = ();
 	my $quiet = 0;
-	Getopt::Long::Configure(qw(gnu_getopt));
+	Getopt::Long::Configure(qw(
+		bundling
+		gnu_compat
+		no_getopt_compat
+		no_ignore_case
+		require_order
+	));
 	Getopt::Long::GetOptions(
 	'tcp|t', sub { $s->tcp(1) },
 	'local|l', sub { $s->tcp('') },

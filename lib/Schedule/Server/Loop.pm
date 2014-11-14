@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Loop v6.3.0;
+package Schedule::Server::Loop v7.0.0;
 
 use strict;
 use warnings;
@@ -18,6 +18,7 @@ use Schedule::Server::Serverfuncs qw(:FUNCS);
 my $s;
 my $socket;
 my $joblist;
+my $log;
 
 # Constant variables:
 
@@ -35,17 +36,20 @@ my $conn;
 #
 
 sub loop_init {
-	($s, $socket, $joblist) = &server_globals();
+	($log) = @_;
+	($s, $socket, $joblist) = &server_globals($log);
 	$s->check_version()
 }
 
 sub serverloop {
-	&loop_init();
+	&loop_init(@_);
 	while(defined($conn = $socket->accept())) {
 		unless($s->conn_recv($conn, $data)) {
 			$s->warning('broken connection attempt')
 				unless($s->quiet());
 			$conn->close();
+			$log->log('warn', 'broken connection attempt')
+				if(defined($log));
 			next
 		}
 		$will_close = 1;
@@ -100,6 +104,7 @@ sub loop_queue {
 	my $index = &my_index($1, 1);
 	$index = scalar(@$joblist) unless(&is_nonnegative($index));
 	my $stat = (($cmd eq 'start') ? '' : undef);
+	$log->log('info', "$cmd " . ($index + 1), $data) if(defined($log));
 	splice(@$joblist, $index, 0, &new_job($conn, $data, $stat));
 	$s->conn_send($conn, $send . &form_unique());
 	$will_close = '' unless(defined($stat))
@@ -114,6 +119,8 @@ sub loop_run {
 	}
 	my $job = $joblist->[$i];
 	my $stat = &loop_bgjob($job, ($cmd eq 'wait'));
+	$log->log('info', $cmd . ' ' . $reply, &get_cmd($job))
+		if(defined($log));
 	$s->conn_send($conn, $reply . "\c@" . ($stat // '') . "\c@");
 	return 1 if(&is_nonnegative($stat));
 	&push_wait($job, $conn);
@@ -125,6 +132,8 @@ sub loop_bg {
 	my $reply = &indexname($index);
 	if($reply ne '0') {
 		my $job = $joblist->[$index];
+		$log->log('info', $cmd . ' ' . $reply, &get_cmd($job))
+			if(defined($log));
 		$reply = &form_unique(&get_unique($job));
 		$reply .= "\c@" . &loop_bgjob($job) . "\c@" if($cmd eq 'bg')
 	}
@@ -145,6 +154,8 @@ sub loop_end {
 	my $j = &job_from_unique($1);
 	return unless(defined($j));
 	my $stat = (&is_nonnegative($data) ? $data : 7);
+	$log->log('info', 'finished (' . $stat . ')', &get_cmd($j))
+		if(defined($log));
 	&set_status($j, $stat);
 	&send_finish($j, $stat)
 }
@@ -156,6 +167,8 @@ sub loop_cancel {
 	my $reply = &indexname($index);
 	if($reply ne '0') {
 		my $job = $joblist->[$index];
+		$log->log('info', 'cancel job ' . $reply, &get_cmd($job))
+			if(defined($log));
 		$reply .= "\c@-" unless(&send_remove($job, $stat));
 		&set_status($job, $stat);
 		&send_finish($job, $stat)
@@ -189,6 +202,7 @@ sub loop_insert {
 	$data =~ s{([^\c@]*)\c@?}{};
 	my $index = &my_index($1, 1);
 	return unless(defined($index));
+	$log->log('notice', 'reorder jobs') if(defined($log));
 	my @insert = ();
 	for my $i (&unique_indices($data)) {
 		push(@insert, $joblist->[$i]);
@@ -211,6 +225,7 @@ sub loop_remove {
 	$data =~ s{^(\d+)\c@?}{};
 	my $stat = ($1 // 0);
 	my @fail = ();
+	$log->log('notice', 'remove job') if(defined($log));
 	for my $i (&unique_indices($data)) {
 		my $job = $joblist->[$i];
 		push(@fail, &indexname($i)) unless(&send_remove($job, $stat));
@@ -227,6 +242,7 @@ sub loop_remove {
 }
 
 sub loop_stop {
+	$log->log('info', 'stop') if(defined($log));
 	$data =~ m{^(\d+)};
 	my $stat = ($1 // 0);
 	my @fail = &send_exit($stat);

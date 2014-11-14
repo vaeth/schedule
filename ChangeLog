@@ -1,5 +1,12 @@
 # ChangeLog for schedule
 
+*schedule-v7.0.0:
+	Martin Väth <martin at mvath.de>:
+	- Support logging (to syslog as well as to file)
+	- Use logging in startup scripts
+	- require_order of options (regression from v6.3.1)
+	- Bump all file versions to 7.0.0
+
 *schedule-v6.3.1:
 	Martin Väth <martin at mvath.de>:
 	- Change --qtime default to %R (no seconds)

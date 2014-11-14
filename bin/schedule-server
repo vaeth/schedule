@@ -3,7 +3,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package ScheduleServer v6.2.0;
+package ScheduleServer v7.0.0;
 
 use strict;
 use warnings;
@@ -19,6 +19,7 @@ use File::Spec ();
 #use POSIX (); # needed for --detach (and recommended for --bg, --daemon)
 #use Pod::Usage (); # optional, but no manpage or help without this
 #use Sys::Hostname (); # not mandatory but recommended
+#use Sys::Syslog (); # neeeded for --syslog
 #use Term::ANSIColor (); # not mandatory but recommended: fallback to no color
 #use version 0.77 ();
 
@@ -37,6 +38,7 @@ use Schedule::Helpers qw(nohup env_to_array is_nonnegative);
 
 our $VERSION;
 my $s = Schedule::Connect->new('schedule-server', $VERSION);
+my $log = undef;
 
 # Default for the Options:
 
@@ -49,6 +51,9 @@ my $user = 'schedule';
 my $group = 'schedule';
 my $keepuser = $<;
 my $keepgroup = $keepuser;
+my $logfile = '';
+my $log_append = '';
+my $syslog = '';
 
 #
 # Functions
@@ -89,6 +94,9 @@ $s->get_options(
 	'umask|m=s', \$umask,
 	'skip-check|S', \$skipcheck,
 	'fd|d=s', \$fd,
+	'logfile=s', sub { $logfile = $_[1]; $log_append = 1 },
+	'Logfile=s', sub { $logfile = $_[1]; $log_append = '' },
+	'syslog', \$syslog,
 	'uid|U=s', \$uid,
 	'gid|G=s', \$gid,
 	'user|u=s', \$user,
@@ -178,6 +186,16 @@ unless($s->did_alpha()) {
 	exit($ret) if($ret);
 	$s->forking()
 }
-my $succ = &Schedule::Server::Loop::serverloop();
+
+# Prepare logging
+
+if(($logfile ne '') || ($syslog ne '')) {
+	require Schedule::Log;
+	$log = Schedule::Log->new($s, $syslog, $logfile, $log_append);
+	$log->log('info', 'listen')
+}
+my $succ = &Schedule::Server::Loop::serverloop($log);
 $succ = '' unless(&closeserver());
-exit($succ ? 0 : 1);
+my $x = ($succ ? 0 : 1);
+$log->log('info', 'exit (' . $x . ')') if(defined($log));
+exit($x);

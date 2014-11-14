@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Clientfuncs v6.2.1;
+package Schedule::Client::Clientfuncs v7.0.0;
 
 use strict;
 use warnings;
