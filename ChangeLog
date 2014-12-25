@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-v7.0.1:
+	Martin Väth <martin at mvath.de>:
+	- Use openrc-run instead of deprecated runscript
+
 *schedule-v7.0.0:
 	Martin Väth <martin at mvath.de>:
 	- Support logging (to syslog as well as to file)
