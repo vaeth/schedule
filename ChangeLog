@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-v7.0.2:
+	Martin Väth <martin at mvath.de>:
+	- Support separate start/stop options for openrc
+
 *schedule-v7.0.1:
 	Martin Väth <martin at mvath.de>:
 	- Use openrc-run instead of deprecated runscript
