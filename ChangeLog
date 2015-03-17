@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-v7.0.3:
+	Martin Väth <martin at mvath.de>:
+	- internal: prefer each() and array-loops over index bookkeeping
+
 *schedule-v7.0.2:
 	Martin Väth <martin at mvath.de>:
 	- Support separate start/stop options for openrc

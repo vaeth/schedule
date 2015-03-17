@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Loop v7.0.0;
+package Schedule::Server::Loop v7.0.3;
 
 use strict;
 use warnings;
@@ -210,13 +210,13 @@ sub loop_insert {
 	}
 	my @oldlist = @$joblist;
 	@$joblist = ();
-	for(my $i = 0; $i < @oldlist; ++$i) {
+	for my $j (@oldlist) {
+		next unless(defined($j));
 		if($index == @$joblist) {
 			push(@$joblist, @insert);
 			@insert = ()
 		}
-		my $j = $oldlist[$i];
-		push(@$joblist, $j) if(defined($j))
+		push(@$joblist, $j)
 	}
 	push(@$joblist, @insert)
 }
@@ -234,8 +234,7 @@ sub loop_remove {
 	}
 	my @oldlist = @$joblist;
 	@$joblist = ();
-	for(my $i = 0; $i < @oldlist; ++$i) {
-		my $j = $oldlist[$i];
+	for my $j (@oldlist) {
 		push(@$joblist, $j) if(defined($j))
 	}
 	$s->conn_send($conn, join("\c@", @fail, '-'))

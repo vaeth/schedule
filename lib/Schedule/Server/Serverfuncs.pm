@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Serverfuncs v7.0.0;
+package Schedule::Server::Serverfuncs v7.0.3;
 
 use strict;
 use warnings;
@@ -141,8 +141,7 @@ sub closeserver {
 sub send_exit {
 	my ($stat) = @_;
 	my @fail = ();
-	for(my $i = 0; $i < @$joblist; ++$i) {
-		my $job = $joblist->[$i];
+	while(my ($i, $job) = each(@$joblist)) {
 		push(@fail, &indexname($i)) unless(&send_remove($job, $stat));
 		&send_finish($job, $stat)
 	}
@@ -213,8 +212,11 @@ sub index_from_unique {
 sub index_from_at {
 	my ($u) = @_;
 	return undef unless(&is_nonnegative($u));
-	for(my $i = 0; $i < @$joblist; ++$i) {
-		return $i if(&get_unique($joblist->[$i]) == $u)
+	while(my ($i, $job) = each(@$joblist)) {
+		if(&get_unique($job) == $u) {
+			keys(@$joblist);  # reset "each" counter
+			return $i
+		}
 	}
 	undef
 }
