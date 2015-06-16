@@ -25,7 +25,7 @@ service_opts=(
 '(--bg --background -b --daemon -B '{'--detach)-E','-E)--detach'}'[run detached in background]'
 '*'{'-q','--quiet'}'[be more quiet (accumulative)]'
 )
-case ${service} in
+case $service in
 (*server)
 	service_opts+=(
 {'(--skip-check)-S','(-S)--skip-check'}'[skip permission check (dangerous!)]'

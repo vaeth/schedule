@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Serverman v7.0.0;
+package Schedule::Server::Serverman v7.0.5;
 
 use strict;
 use warnings;
@@ -68,7 +68,7 @@ for this purpose.
 The default of the options is taken from the environment variable
 B<SCHEDULE_SERVER_OPTS>; shell-quoting in the value is supported.
 Moreover, (unquoted) environment variable references of the form $VAR
-or ${VAR} in it are (recursively) expanded.
+or $VAR in it are (recursively) expanded.
 If B<SCHEDULE_SERVER_OPTS> is undefined, the default is taken from the
 environment variable B<SCHEDULE_OPTS>, according to the same rules.
 
@@ -110,7 +110,7 @@ Use a unix domain socket (file) for IPC with the client(s).
 =item B<--file=>I<file> or B<-f> I<file>
 
 Use I<file> as a unix domain socket filename for IPC.
-The default is B<${TMPDIR}/schedule-${USER}/server>.
+The default is B<$TMPDIR/schedule-$USER/server>.
 All parent directories are created if they do not exist.
 This option implies B<--local> (unless overridden later on).
 

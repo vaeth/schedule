@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-v7.0.5:
+	Martin Väth <martin at mvath.de>:
+	- Avoid redundant quoting in shell scripts
+
 *schedule-v7.0.4:
 	Martin Väth <martin at mvath.de>:
 	- Fix start-stop-daemon usage for openrc

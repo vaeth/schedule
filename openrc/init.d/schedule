@@ -8,13 +8,13 @@ start() {
 	eval start-stop-daemon -S -b -m -p /run/schedule.pid -N 9 \
 		-u \"\${schedule_user:-schedule}\" \
 		-g \"\${schedule_group:-schedule}\" \
-		-- schedule-server ${schedule_opts} ${schedule_start_opts}
-	eend ${?}
+		-- schedule-server $schedule_opts $schedule_start_opts
+	eend $?
 }
 
 stop() {
 	ebegin 'Stopping schedule-server'
-	eval schedule ${schedule_opts} ${schedule_stop_opts} stop-server \
+	eval schedule $schedule_opts $schedule_stop_opts stop-server \
 		|| start-stop-daemon -K schedule-server
-	eend ${?}
+	eend $?
 }
