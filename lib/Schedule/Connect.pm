@@ -7,7 +7,7 @@
 # common parts of schedule and schedule-server which are always needed
 
 require 5.012;
-package Schedule::Connect v7.0.5;
+package Schedule::Connect v7.1.0;
 
 use strict;
 use warnings;
@@ -49,8 +49,10 @@ my $serversupallowed = '';
 
 my %minversion = (
 # temporary:
+	'Schedule::Server::Serverfuncs' => version->declare('v7.0.3'),
 	'Schedule::Client::Scheduleman' => version->declare('v7.0.5'),
 	'Schedule::Server::Serverman' => version->declare('v7.0.5'),
+	'Schedule::Server::Loop' => version->declare('v7.1.0'),
 
 # Keep the following always:
 	'Schedule::Connect' => undef

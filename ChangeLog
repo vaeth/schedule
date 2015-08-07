@@ -1,5 +1,12 @@
 # ChangeLog for schedule
 
+*schedule-v7.1.0:
+	Martin Väth <martin at mvath.de>:
+	- Fix loglevel severity 'warning'.
+	  Security fix! (DOS: let server finish without knowing the password)
+	- Check for correct Server::Serverfuncs version
+	- Let shell script run with set -u
+
 *schedule-v7.0.5:
 	Martin Väth <martin at mvath.de>:
 	- Avoid redundant quoting in shell scripts

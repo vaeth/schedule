@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Loop v7.0.3;
+package Schedule::Server::Loop v7.1.0;
 
 use strict;
 use warnings;
@@ -48,7 +48,7 @@ sub serverloop {
 			$s->warning('broken connection attempt')
 				unless($s->quiet());
 			$conn->close();
-			$log->log('warn', 'broken connection attempt')
+			$log->log('warning', 'broken connection attempt')
 				if(defined($log));
 			next
 		}
