@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Cmd::Queue v7.0.0;
+package Schedule::Client::Cmd::Queue v7.1.1;
 
 use strict;
 use warnings;
@@ -188,7 +188,7 @@ sub statusbar {
 		return $stat if($c eq 's');
 		if(($c eq 'c') || ($c eq 'C')) {
 			return &join_quoted($ARGV[0]) if(@ARGV == 1);
-			return $ARGV[0] if($c eq 'c');
+			return $ARGV[0] // '' if($c eq 'c');
 			return &join_quoted(@ARGV)
 		}
 		$c

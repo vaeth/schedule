@@ -1,8 +1,12 @@
 # ChangeLog for schedule
 
+*schedule-v7.1.1:
+	Martin Väth <martin at mvath.de>:
+	- Fix queuing of empty jobs
+
 *schedule-v7.1.0:
 	Martin Väth <martin at mvath.de>:
-	- Fix loglevel severity 'warning'.
+	- Fix loglevel severity 'warning'
 	  Security fix! (DOS: let server finish without knowing the password)
 	- Check for correct Server::Serverfuncs version
 	- Let shell script run with set -u
@@ -151,7 +155,7 @@
 *schedule-2.0:
 	Martin Väth <martin at mvath.de>:
 	- Let exec, run, wait support static jobs and static job ranges to
-	  "cancel" the race condition as desired.
+	  "cancel" the race condition as desired
 	- Make parallel and bg race-free, parallel waiting only for the
 	  processes just started
 	- Let --daemon not discard stderr (in contrast to --detach)
@@ -238,7 +242,7 @@
 
 *schedule-0.4:
 	Martin Väth <martin at mvath.de>:
-	- Support optionally Unix domain sockets instead of TCP sockets.
+	- Support optionally Unix domain sockets instead of TCP sockets
 	- Improve README, giving hints about security
 
 *schedule-0.3:
