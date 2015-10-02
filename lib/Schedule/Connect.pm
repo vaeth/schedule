@@ -7,7 +7,7 @@
 # common parts of schedule and schedule-server which are always needed
 
 require 5.012;
-package Schedule::Connect v7.1.1;
+package Schedule::Connect v7.2.0;
 
 use strict;
 use warnings;
@@ -34,7 +34,7 @@ my $extversion = undef;
 
 # The client accepts servers in the followin interval:
 
-my $servermin = $minversion;
+my $servermin = $VERSION;
 my $serversup = version->declare('v8.0.0');
 my $serversupallowed = '';
 
@@ -53,7 +53,7 @@ my %minversion = (
 	'Schedule::Client::Scheduleman' => version->declare('v7.0.5'),
 	'Schedule::Server::Serverman' => version->declare('v7.0.5'),
 	'Schedule::Server::Loop' => version->declare('v7.1.0'),
-	'Schedule::Client::Cmd::Queue' => $VERSION,
+	'Schedule::Client::Cmd::Queue' => version->declare('v7.1.1'),
 
 # Keep the following always:
 	'Schedule::Connect' => undef
@@ -572,15 +572,16 @@ sub my_decrypt {
 }
 
 sub padding {
-	my $str = Digest::SHA::sha256(rand() . rand() . rand() . rand()) . shift() . '17';
+	my $str = Digest::SHA::sha256(rand() . rand() . rand() . rand()) .
+		shift() . 'To verify the password, check this magic string as a checksum!';
 	my $mod = (length($str) & 0x0F);
-	$mod ? ($str . ("z" x (16 - $mod))) : $str
+	$mod ? ($str . ("\n" x (16 - $mod))) : $str
 }
 
 sub unpadding {
 	return '' if(length($_[0]) <= 32);
 	$_[0] = substr($_[0], 32);
-	$_[0] =~ s{17z*$}{}
+	$_[0] =~ s{To\ verify\ the\ password\,\ check\ this\ magic\ string\ as\ a\ checksum\!\n*$}{}
 }
 
 1;

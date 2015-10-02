@@ -1,5 +1,10 @@
 # ChangeLog for schedule
 
+*schedule-v7.2.0:
+	Martin Väth <martin at mvath.de>:
+	- Increase magic checksum for password verification to 496 bit
+	  to be reasonably secure against DOS attacks with random data
+
 *schedule-v7.1.1:
 	Martin Väth <martin at mvath.de>:
 	- Fix queuing of empty jobs
