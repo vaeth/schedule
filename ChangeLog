@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-v7.2.1:
+	Martin Väth <martin at mvath.de>:
+	- Fix "core dumped" message
+
 *schedule-v7.2.0:
 	Martin Väth <martin at mvath.de>:
 	- Increase magic checksum for password verification to 496 bit

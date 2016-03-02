@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Cmd::Queue v7.1.1;
+package Schedule::Client::Cmd::Queue v7.2.1;
 
 use strict;
 use warnings;
@@ -121,7 +121,7 @@ sub queue {
 		$sys = 127
 	} elsif($sys & 127) {
 		$s->error($jobtext . ' died with signal ' . ($sys & 127) .
-			(($sys & 128) ? '' : ' (core dumped)'))
+			(($sys & 128) ? ' (core dumped)' : ''))
 				unless($s->quiet());
 		$sys = 127
 	} else {

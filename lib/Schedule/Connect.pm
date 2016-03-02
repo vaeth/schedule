@@ -7,7 +7,7 @@
 # common parts of schedule and schedule-server which are always needed
 
 require 5.012;
-package Schedule::Connect v7.2.0;
+package Schedule::Connect v7.2.1;
 
 use strict;
 use warnings;
@@ -53,7 +53,7 @@ my %minversion = (
 	'Schedule::Client::Scheduleman' => version->declare('v7.0.5'),
 	'Schedule::Server::Serverman' => version->declare('v7.0.5'),
 	'Schedule::Server::Loop' => version->declare('v7.1.0'),
-	'Schedule::Client::Cmd::Queue' => version->declare('v7.1.1'),
+	'Schedule::Client::Cmd::Queue' => $VERSION,
 
 # Keep the following always:
 	'Schedule::Connect' => undef
@@ -427,7 +427,7 @@ sub exec_alpha {
 		$sys = 127
 	} elsif($sys & 127) {
 		$errtext = 'alpha-command died with signal ' . ($sys & 127) .
-			(($sys & 128) ? '' : ' (core dumped)');
+			(($sys & 128) ? ' (core dumped)' : '');
 		$sys = 127
 	} else {
 		$sys >>= 8;
