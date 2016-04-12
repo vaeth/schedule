@@ -7,7 +7,7 @@
 # common parts of schedule and schedule-server which are always needed
 
 require 5.012;
-package Schedule::Connect v7.2.1;
+package Schedule::Connect v7.2.2;
 
 use strict;
 use warnings;
@@ -34,7 +34,7 @@ my $extversion = undef;
 
 # The client accepts servers in the followin interval:
 
-my $servermin = $VERSION;
+my $servermin = version->declare('v7.2.0');
 my $serversup = version->declare('v8.0.0');
 my $serversupallowed = '';
 
@@ -49,11 +49,11 @@ my $serversupallowed = '';
 
 my %minversion = (
 # temporary:
-	'Schedule::Server::Serverfuncs' => version->declare('v7.0.3'),
+	'Schedule::Client::Cmd::Queue' => version->declare('v7.2.1'),
 	'Schedule::Client::Scheduleman' => version->declare('v7.0.5'),
+	'Schedule::Server::Loop' => $VERSION,
+	'Schedule::Server::Serverfuncs' => $VERSION,
 	'Schedule::Server::Serverman' => version->declare('v7.0.5'),
-	'Schedule::Server::Loop' => version->declare('v7.1.0'),
-	'Schedule::Client::Cmd::Queue' => $VERSION,
 
 # Keep the following always:
 	'Schedule::Connect' => undef
@@ -216,7 +216,7 @@ sub serversupallowed {
 }
 
 sub fatal {
-	&error(@_);
+	&error;
 	exit(1)
 }
 
@@ -296,7 +296,7 @@ sub check_queue {
 
 sub usage {
 	my $s = shift();
-	my $o = ((scalar(@_) <= 1) ? ($_[0] // 1) : {@_});
+	my $o = ((1 >= @_) ? ($_[0] // 1) : {@_});
 	$o = (&is_nonnegative($o) ? {-exitval => $o} : {-message => $o})
 		unless(ref($o) eq 'HASH');
 	my @name;

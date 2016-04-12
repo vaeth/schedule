@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Loop v7.1.0;
+package Schedule::Server::Loop v7.2.2;
 
 use strict;
 use warnings;
@@ -42,7 +42,7 @@ sub loop_init {
 }
 
 sub serverloop {
-	&loop_init(@_);
+	&loop_init;
 	while(defined($conn = $socket->accept())) {
 		unless($s->conn_recv($conn, $data)) {
 			$s->warning('broken connection attempt')

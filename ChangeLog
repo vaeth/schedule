@@ -1,5 +1,10 @@
 # ChangeLog for schedule
 
+*schedule-v7.2.2:
+	Martin Väth <martin at mvath.de>:
+	- Syntactic micro-optimizations
+	- Allow server of v7.2.0
+
 *schedule-v7.2.1:
 	Martin Väth <martin at mvath.de>:
 	- Fix "core dumped" message

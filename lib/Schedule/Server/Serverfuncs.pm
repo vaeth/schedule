@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Serverfuncs v7.0.3;
+package Schedule::Server::Serverfuncs v7.2.2;
 
 use strict;
 use warnings;
@@ -197,7 +197,7 @@ sub test_jobs {
 # return job corresponding to unique identifier
 
 sub job_from_unique {
-	my $i = &index_from_unique(@_);
+	my $i = &index_from_unique;
 	defined($i) ? $joblist->[$i] : undef
 }
 
