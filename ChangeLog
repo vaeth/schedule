@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-v7.3.0:
+	Martin Väth <martin at mvath.de>:
+	- Improve security in provided systemd unit
+
 *schedule-v7.2.2:
 	Martin Väth <martin at mvath.de>:
 	- Syntactic micro-optimizations

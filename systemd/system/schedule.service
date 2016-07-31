@@ -8,6 +8,12 @@ Requires=schedule.socket
 User=schedule
 Group=schedule
 Nice=19
+CapabilityBoundingSet=
+MemoryDenyWriteExecute=true
+NoNewPrivileges=true
+PrivateDevices=true
+ReadOnlyPaths=/
+RestrictRealtime=true
 # Use the following line only if you want systemd socket activation:
 StandardInput=socket
 # Use option --fd=0 only if you want systemd socket activation:
