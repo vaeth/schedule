@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Serverfuncs v7.2.2;
+package Schedule::Server::Serverfuncs v7.4.0;
 
 use strict;
 use warnings;
@@ -95,18 +95,19 @@ sub signal_handler {
 }
 
 sub openserver_standard {
-	$socket = ($s->tcp() ? IO::Socket::INET->new(
+	$socket = $s->timeout($s->tcp() ? sub { IO::Socket::INET->new(
 		LocalAddr => $s->addr(),
 		LocalPort => $s->port(),
 		Type => IO::Socket::SOCK_STREAM(),
 		Listen => IO::Socket::SOMAXCONN(),
 		Reuse => 1
-	) : IO::Socket::UNIX->new(
+	)} : sub { IO::Socket::UNIX->new(
 		Local => $s->file(),
 		Type => IO::Socket::SOCK_STREAM(),
 		Listen => IO::Socket::SOMAXCONN(),
 		Reuse => 1
-	));
+	)});
+	$s->fatal('timeout when setting up socket') if($@ eq 'timeout');
 	defined($socket) || $s->fatal('unable to setup socket: ' . $!,
 		($s->tcp() ? () : 'maybe you should remove ' . $s->file()))
 }

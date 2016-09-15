@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Helpers v7.0.0;
+package Schedule::Helpers v7.4.0;
 
 use strict;
 use warnings;
@@ -31,6 +31,7 @@ my @export_rest = qw(
 	split_quoted
 	join_quoted
 	env_to_array
+	with_timeout
 );
 
 our @EXPORT_OK = (@export_is, @export_color, @export_sysquery, @export_rest);
@@ -144,6 +145,65 @@ sub join_quoted {
 
 sub env_to_array {
 	&split_quoted($ENV{$_[0]} // '')
+}
+
+# with_timeout($timeout => sub { code } [, args] )
+# If code is canceled, return value is undef, and $@ is 'timeout'
+# The implementation of this function is inspired by Time::Out 0.11
+sub with_timeout {
+	my $timeout = shift();
+	my $code = shift();
+	return $code->(@_) unless($timeout);
+	my $prev_alarm = alarm(0);
+	my $prev_time = ($prev_alarm ? time() : undef);
+	my @ret = ();
+	my $at = '';
+	my $overrun = '';
+	my $wantarray = wantarray();
+	{
+		# Disable alarm to prevent possible race between end of eval and alarm(0)
+		local $SIG{ALRM} = sub {};
+		@ret = eval {
+			local $SIG{ALRM} = sub { die $code };
+			alarm(($prev_alarm && ($prev_alarm < $timeout)) ?
+				$prev_alarm : $timeout);
+			my @r = ();
+			if($wantarray) {
+				@r = $code->(@_)
+			} else {
+				$r[0] = $code->(@_)
+			}
+			alarm(0);
+			@r
+		};
+		alarm(0);
+		$at = ($@ // '')
+	}
+	if($at) {
+		if((ref($at) eq 'CODE') && ($at eq $code)) {
+			$overrun = 1
+		} else {
+			if(!ref($at)){
+				chomp($at);
+				die($at . "\n")
+			} else {
+				croak($at)
+			}
+		}
+	}
+	if($prev_alarm) {
+		my $new_alarm = $prev_alarm - (time() - $prev_time);
+		if($new_alarm >= 0) {
+			alarm($new_alarm)
+		} else {
+			kill('ALRM', $$)
+		}
+	}
+	if($overrun) {
+		$@ = 'timeout';
+		return undef
+	}
+	$wantarray ? (@ret) : $ret[0]
 }
 
 1;

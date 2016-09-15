@@ -15,8 +15,8 @@ case ${1-} in
 	remain=1
 	shift;;
 esac
-case ${remain:-0} in
-0|-*|[nfNF]*|[oO][fF]*)
+case $remain in
+[nNfF0-]*|[oO][fF]*)
 	remainA=
 	remainB=;;
 *)

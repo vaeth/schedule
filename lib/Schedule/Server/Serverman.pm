@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Server::Serverman v7.0.5;
+package Schedule::Server::Serverman v7.4.0;
 
 use strict;
 use warnings;
@@ -143,7 +143,7 @@ This option implies B<--tcp> (unless overridden later on).
 =item B<--timeout=>I<seconds> or B<-T> I<seconds>
 
 Time to wait in case of communication problems; the default is 10 B<seconds>.
-The value B<0> means to skip the timeout.
+The value B<0> means to skip the timeout, i.e. to possibly wait forever.
 
 =item B<--passfile=>I<passfile> or B<-Y> I<passfile>
 

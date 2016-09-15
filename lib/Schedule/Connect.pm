@@ -7,7 +7,7 @@
 # common parts of schedule and schedule-server which are always needed
 
 require 5.012;
-package Schedule::Connect v7.3.0;
+package Schedule::Connect v7.4.0;
 
 use strict;
 use warnings;
@@ -21,7 +21,7 @@ use version 0.77 ();
 #use POSIX (); # needed for --detach (and recommended for --bg, --daemon)
 #use Pod::Usage (); # optional, but no manpage or help without this
 
-use Schedule::Helpers qw(:COLOR :IS :SYSQUERY);
+use Schedule::Helpers qw(:COLOR :IS :SYSQUERY with_timeout);
 
 our $VERSION; # auto-initialized to the version of Schedule::Connect
 
@@ -32,7 +32,7 @@ my $minversion = version->declare('v7.0.0');
 my $maxversion = $VERSION;
 my $extversion = undef;
 
-# The client accepts servers in the followin interval:
+# The client accepts servers in the following interval:
 
 my $servermin = version->declare('v7.2.0');
 my $serversup = version->declare('v8.0.0');
@@ -47,13 +47,16 @@ my $serversupallowed = '';
 # For modules not appearing here, the above defaults apply.
 # If "undefined", no corresponding restriction is required.
 
+my $version740 = $VERSION; #  version->declare('v7.4.0');
 my %minversion = (
 # temporary:
+	'Schedule::Client::Clientfuncs' => $version740,
 	'Schedule::Client::Cmd::Queue' => version->declare('v7.2.1'),
-	'Schedule::Client::Scheduleman' => version->declare('v7.0.5'),
+	'Schedule::Client::Scheduleman' => $version740,
+	'Schedule::Helpers' => $version740,
 	'Schedule::Server::Loop' => version->declare('v7.2.2'),
-	'Schedule::Server::Serverfuncs' => version->declare('v7.2.2'),
-	'Schedule::Server::Serverman' => version->declare('v7.0.5'),
+	'Schedule::Server::Serverfuncs' => $version740,
+	'Schedule::Server::Serverman' => $version740,
 
 # Keep the following always:
 	'Schedule::Connect' => undef
@@ -147,7 +150,10 @@ sub addr {
 
 sub timeout {
 	my $s = shift();
-	@_ ? ($s->{timeout} = shift()) : $s->{timeout}
+	return $s->{timeout} unless(@_);
+	my $arg = shift();
+	return ($s->{timeout} = $arg) unless(ref($arg) eq 'CODE');
+	&with_timeout(($s->{timeout}) => $arg, @_)
 }
 
 sub port {
@@ -503,8 +509,19 @@ sub decode_range {
 }
 
 sub conn_send_raw {
-	my ($s, $conn, $data) = @_;
-	defined($conn->send($data))
+	my ($s, $conn, $data, $timeout) = @_;
+	if($timeout && !IO::Select->new($conn)->can_write($timeout)) {
+		$s->error('timeout when writing to socket');
+		return ''
+	}
+	my $sent = &with_timeout($timeout => sub {
+		defined($conn->send($data))
+	});
+	if($@ eq 'timeout') {
+		$s->error('timeout when writing to socket');
+		return ''
+	}
+	1
 }
 
 sub conn_recv_raw {
@@ -517,7 +534,14 @@ sub conn_recv_raw {
 		$s->error('timeout when reading socket');
 		return ''
 	}
-	unless(defined($conn->recv($_[0], $len))) {
+	my $received = &with_timeout($timeout => sub {
+		defined($conn->recv($_[0], $len))
+	}, @_);
+	if($@ eq 'timeout') {
+		$s->error('timeout when reading socket');
+		return ''
+	}
+	unless($received) {
 		$s->error('cannot receive from socket: ' . $!);
 		return ''
 	}
@@ -529,9 +553,10 @@ sub conn_recv_raw {
 }
 
 sub conn_send_smart {
-	my ($s, $conn, $data) = @_;
+	my ($s, $conn, $data, $timeout) = @_;
 	my $len = length($data);
-	$s->conn_send_raw($conn, $len . (' ' x (32 - length($len))) . $data)
+	$s->conn_send_raw($conn, $len . (' ' x (32 - length($len))) . $data,
+			(($timeout // 0) || $s->timeout()))
 }
 
 sub conn_recv_smart {
@@ -547,9 +572,10 @@ sub conn_recv_smart {
 
 sub conn_send {
 	my $s = shift();
+	my $conn = shift();
 	my $p = ($s->password());
-	$s->conn_send_smart($_[0],
-		(defined($p) ? &my_encrypt($p, $_[1]) : $_[1]))
+	my $data = (defined($p) ? &my_encrypt($p, shift()) : shift());
+	$s->conn_send_smart($conn, $data, @_)
 }
 
 sub conn_recv {

@@ -6,5 +6,5 @@ schedule_group=schedule
 # Options to pass to schedule-server/schedule at startup/stop (or both)
 # The options are eval'ed, so use quoting!
 schedule_start_opts=--syslog
-schedule_stop_opts=
+schedule_stop_opts=-T10
 schedule_opts=-Y/etc/schedule.password

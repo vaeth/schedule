@@ -1,5 +1,15 @@
 # ChangeLog for schedule
 
+*schedule-v7.4.0:
+	Martin Väth <martin at mvath.de>:
+	- Use timeout also when opening the socket (previously, e.g.
+	  an iptables block could have caused a deadlock)
+	- Use timeout also when sending
+	- Use additional alarm protection when sending and receiving
+	- Clarify description of --timeout on manpages
+	- Improve negative test for SCHEDULE_REMAIN
+	- openrc: Explicitly set timeout for stopping in conf.d
+
 *schedule-v7.3.0:
 	Martin Väth <martin at mvath.de>:
 	- Improve security in provided systemd unit

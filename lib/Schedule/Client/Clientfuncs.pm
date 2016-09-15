@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 require 5.012;
-package Schedule::Client::Clientfuncs v7.0.0;
+package Schedule::Client::Clientfuncs v7.4.0;
 
 use strict;
 use warnings;
@@ -59,14 +59,19 @@ sub client_globals {
 { # A static variable:
 	my $checked = '';
 sub openclient {
-	$socket = ($s->tcp() ? IO::Socket::INET->new(
+	$socket = $s->timeout($s->tcp() ? sub { IO::Socket::INET->new(
 		PeerAddr => $s->addr(),
 		PeerPort => $s->port(),
 		Type => IO::Socket::SOCK_STREAM()
-	) : IO::Socket::UNIX->new(
+	)} : sub { IO::Socket::UNIX->new(
 		Peer => $s->file(),
 		Type => IO::Socket::SOCK_STREAM()
-	));
+	)});
+	if($@ eq 'timeout') {
+		my $silence = (shift() // '');
+		$s->error('timeout when setting up socket') unless($silence);
+		return ''
+	}
 	unless(defined($socket)) {
 		my $silence = (shift() // '');
 		$s->error("unable to setup socket: $!",
