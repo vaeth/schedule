@@ -18,11 +18,8 @@ RestrictRealtime=true
 StandardInput=socket
 # Use option --fd=0 only if you want systemd socket activation:
 ExecStart=/usr/bin/schedule-server --syslog -Y/etc/schedule.password --fd=0
-
-# ExecStop would be better but for unknown reasons sometimes fails:
-#ExecStop=/usr/bin/schedule -Y /etc/schedule.password stop-server
-# So we work around this problem:
-# We kill by signal, considering the "killed" exit status a success:
+ExecStop=/usr/bin/schedule -Y/etc/schedule.password -T7 stop-server
+TimeoutStopSec=10
 SuccessExitStatus=130
 
 [Install]

@@ -318,13 +318,14 @@ users who should be able to access the default server to the group "schedule".
 If your distribution has no package for schedule, you have to copy
 bin/* into /usr/bin/ or any other directory of your $PATH.
 
-Moreover, you have to copy lib/ (or its content) into the same directory
-as the binaries or into the parent directory or into a directory shown by
+Moreover, you have to copy share/schedule (or its content) into the
+same directory as the binaries or into the parent directory or into
+a directory shown by
 	perl -e 'print join("\n", @INC, "")'
-Alternatively, copy lib/* into /usr/share/schedule (or into a different
-directory by modifying that path in the sourcecode; for a proper installation
-it is recommended in this case to remove/comment out the lines between
-"use FindBin;" and "}" in the sourcecode).
+Alternatively, copy share/schedule into /usr/share/schedule
+(or into a different directory by modifying that path in the sourcecode;
+for a proper installation it is recommended in this case to remove/comment
+out the lines between "use FindBin;" and "}" in the sourcecode).
 
 For zsh completion support also copy zsh/_schedule into a directory of
 your zsh's $fpath.
@@ -356,11 +357,22 @@ release. Therefore, every file can have a different version number
 (which can be found after the "package" keyword near the beginning).
 
 By definition, the version number of the project is that of the "main" file
-lib/Schedule/Connect.pm (module Schedule::Connect).
+share/schedule/Schedule/Connect.pm (module Schedule::Connect).
 This file contains also information which other minimal/maximal/exact
 versions of files belong to that project version - this is specified
-near the beginning of lib/Schedule/Connect.pm
+near the beginning of share/schedule/Schedule/Connect.pm
+Moreover, the beginng of that file also contains information which range
+of running servers is accepted with the current schedule version:
+In general, the version of the server and the client must match, but the
+client accepts all servers which fully support the protocoll he speaks,
+i.e. you can use the same server for various client version when the
+internal protocoll did not change.
+The server in turn does not check the client's version but just expects
+to be talked to with the correct protocoll: A buggy/malevolent client might be
+lying about his version number anyway (if he can establish a possibly encrypted
+connection), and a well working client checks the server's version for
+compatibility.
 
 Auxiliary files in zsh, openrc, zsh, env.d, and bin/schedule-tmux
 carry no explicit version number; their version number is implicit
-that of the project (lib/Schedule/Connect.pm).
+that of the project (share/schedule/Schedule/Connect.pm).

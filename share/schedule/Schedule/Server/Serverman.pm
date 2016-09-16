@@ -3,12 +3,14 @@
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-require 5.012;
-package Schedule::Server::Serverman v7.4.0;
+BEGIN { require 5.012 }
+package Schedule::Server::Serverman v7.5.0;
 
 use strict;
 use warnings;
 use integer;
+
+=encoding UTF-8
 
 =head1 NAME
 

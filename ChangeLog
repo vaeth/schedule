@@ -1,5 +1,14 @@
 # ChangeLog for schedule
 
+*schedule-v7.5.0:
+	Martin Väth <martin at mvath.de>:
+	- Rename lib/ -> shared/schedule/ in distribution and path search
+	- systemd: Cleanly stop, hoping that new timeout fixes the issues
+	- openrc: Decrease suggested timeout (symmetric to systemd)
+	- schedule man: Fix marking in SYNOPSIS
+	- man: Output in utf-8
+	- README: Explain file/server version numbering/compatibility
+
 *schedule-v7.4.0:
 	Martin Väth <martin at mvath.de>:
 	- Use timeout also when opening the socket (previously, e.g.

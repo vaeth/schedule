@@ -6,8 +6,8 @@
 # This is the "main" file of the schedule project, containing the
 # common parts of schedule and schedule-server which are always needed
 
-require 5.012;
-package Schedule::Connect v7.4.0;
+BEGIN { require 5.012 }
+package Schedule::Connect v7.5.0;
 
 use strict;
 use warnings;
@@ -28,7 +28,7 @@ our $VERSION; # auto-initialized to the version of Schedule::Connect
 # The default minimal/maximal/exact accepted versions for the modules/programs.
 # If undefined, no corresponding restriction is required.
 
-my $minversion = version->declare('v7.0.0');
+my $minversion = version->declare('v7.5.0');
 my $maxversion = $VERSION;
 my $extversion = undef;
 
@@ -40,23 +40,16 @@ my $serversupallowed = '';
 
 # Exceptions overriding the above global rules.
 # Each file is referred to by the module name appearing on top of the file.
-# (For files in lib/* this is * without .pm and with / replaced by ::, e.g.
-# this file lib/Schedule/Connect.pm is referred to as Schedule::Connect
+# (For files in share/schedule/* this is * without .pm and with / replaced
+# by ::, e.g. the current file share/schedule/Schedule/Connect.pm is referred
+# to as Schedule::Connect
 # The files bin/schedule and bin/schedule-server are referred to as
 # Schedule and ScheduleServer).
 # For modules not appearing here, the above defaults apply.
 # If "undefined", no corresponding restriction is required.
 
-my $version740 = $VERSION; #  version->declare('v7.4.0');
 my %minversion = (
 # temporary:
-	'Schedule::Client::Clientfuncs' => $version740,
-	'Schedule::Client::Cmd::Queue' => version->declare('v7.2.1'),
-	'Schedule::Client::Scheduleman' => $version740,
-	'Schedule::Helpers' => $version740,
-	'Schedule::Server::Loop' => version->declare('v7.2.2'),
-	'Schedule::Server::Serverfuncs' => $version740,
-	'Schedule::Server::Serverman' => $version740,
 
 # Keep the following always:
 	'Schedule::Connect' => undef

@@ -3,8 +3,8 @@
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-require 5.012;
-package Schedule::Server::Loop v7.2.2;
+BEGIN { require 5.012 }
+package Schedule::Server::Loop v7.5.0;
 
 use strict;
 use warnings;

@@ -3,12 +3,14 @@
 # Copyright Martin Väth <martin@mvath.de>.
 # This is part of the schedule project.
 
-require 5.012;
-package Schedule::Client::Scheduleman v7.4.0;
+BEGIN { require 5.012 }
+package Schedule::Client::Scheduleman v7.5.0;
 
 use strict;
 use warnings;
 use integer;
+
+=encoding UTF-8
 
 =head1 NAME
 
@@ -22,9 +24,9 @@ schedule - queue jobs for later execution and schedule them
 
 =item B<schedule> [options] I<command> [I<jobs> ...]
 
-=item B<schedule> [options] I<stop-server>
+=item B<schedule> [options] B<stop-server>
 
-=item B<schedule> [options] I<quote> [I<args>]
+=item B<schedule> [options] B<quote> [I<args>]
 
 =back
 
