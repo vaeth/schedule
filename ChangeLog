@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-v7.5.0_p1:
+	Martin Väth <martin at mvath.de>:
+	- systemd: Add security options of systemd-232
+
 *schedule-v7.5.0:
 	Martin Väth <martin at mvath.de>:
 	- Rename lib/ -> shared/schedule/ in distribution and path search
