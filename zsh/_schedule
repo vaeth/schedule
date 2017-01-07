@@ -116,8 +116,7 @@ case $state in
 	'cancel:cancel queued jobs'
 	)
 	}
-	_describe -t commands 'command' cmds
-	ret=$?;;
+	_describe -t commands 'command' cmds && ret=0;;
 (*rest)
 	local cmd=
 	if [[ $NORMARG -gt 1 ]]
@@ -133,8 +132,7 @@ case $state in
 	jobrange=
 	case $cmd in
 	(*q*|s|start)
-		_normal
-		ret=$?;;
+		_normal && ret=0;;
 	(sto*)
 		;;
 	(re*)
@@ -146,8 +144,7 @@ case $state in
 	esac
 	if [[ $#jobrange -gt 0 ]]
 	then	_description jobrange expl 'job range'
-		compadd "$expl[@]" - $jobrange
-		ret=$?
+		compadd "$expl[@]" - $jobrange && ret=0
 	fi;;
 esac
 return ret
