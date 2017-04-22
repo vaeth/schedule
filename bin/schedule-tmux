@@ -15,14 +15,6 @@ case ${1-} in
 	remain=1
 	shift;;
 esac
-case $remain in
-[nNfF0-]*|[oO][fF]*)
-	remainA=
-	remainB=;;
-*)
-	remainA='set-option set-remain-on-exit on ;'
-	remainB='; set-option set-remain-on-exit off';;
-esac
 
 # Check whether the command is appropriate, and possibly print a manpage:
 schedule --check "$@"
@@ -37,9 +29,18 @@ tmux wait-for $$ &
 
 # Now we open a new window in which we output the command and run schedule
 # with a value of -a which will end our waiting task above.
+# In case of remain, we additionally store the number of that window
+# and set remain-on-exit for it.
 
-tmux $remainA new-window -d "schedule quote schedule $cmd
-schedule -a \"tmux wait-for -S $$\" $cmd" $remainB
+case $remain in
+[nNfF0-]*|[oO][fF]*)
+	tmux new-window -d "schedule quote schedule $cmd
+schedule -a \"tmux wait-for -S $$\" $cmd";;
+*)
+	window=`tmux new-window -Pd "schedule quote schedule $cmd
+schedule -a \"tmux wait-for -S $$\" $cmd"`
+	tmux set-window-option -t "$window" remain-on-exit on;;
+esac
 
 # Now we wait for the end of our above task: When this task finishes,
 # we can be sure that the passed command has been queued.

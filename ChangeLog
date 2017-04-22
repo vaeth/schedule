@@ -1,5 +1,13 @@
 # ChangeLog for schedule
 
+*schedule-v7.5.2:
+	Martin Väth <martin at mvath.de>:
+	- schedule-tmux --remain: Avoid set-remain-on-exit (for >=tmux-2.4)
+
+*schedule-v7.5.1:
+	Martin Väth <martin at mvath.de>:
+	- zsh completion: Fix return value (needed for >=zsh-5.3)
+
 *schedule-v7.5.0_p1:
 	Martin Väth <martin at mvath.de>:
 	- systemd: Add security options of systemd-232

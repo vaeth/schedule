@@ -7,7 +7,7 @@
 # common parts of schedule and schedule-server which are always needed
 
 BEGIN { require 5.012 }
-package Schedule::Connect v7.5.1;
+package Schedule::Connect v7.5.2;
 
 use strict;
 use warnings;
