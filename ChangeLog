@@ -1,5 +1,10 @@
 # ChangeLog for schedule
 
+*schedule-v7.5.3:
+	Martin Väth <martin at mvath.de>:
+	- Fix a quoting problem which caused with pie on amd64 the error:
+	  Hexadecimal number > 0xffffffff non-portable at (eval 1) line 1
+
 *schedule-v7.5.2:
 	Martin Väth <martin at mvath.de>:
 	- schedule-tmux --remain: Avoid set-remain-on-exit (for >=tmux-2.4)

@@ -7,7 +7,7 @@
 # common parts of schedule and schedule-server which are always needed
 
 BEGIN { require 5.012 }
-package Schedule::Connect v7.5.2;
+package Schedule::Connect v7.5.3;
 
 use strict;
 use warnings;
@@ -48,8 +48,11 @@ my $serversupallowed = '';
 # For modules not appearing here, the above defaults apply.
 # If "undefined", no corresponding restriction is required.
 
+my $version753 = $VERSION; #  version->declare('v7.5.3')
 my %minversion = (
 # temporary:
+	'Schedule' => $version753,
+	'ScheduleServer' => $version753,
 
 # Keep the following always:
 	'Schedule::Connect' => undef
@@ -322,6 +325,8 @@ sub get_options {
 	my $s = shift();
 	my @passfile = ();
 	my $quiet = 0;
+	$s->check_version((($s->name()) =~ m{serv}i) ?
+		'ScheduleServer' : 'Schedule');
 	Getopt::Long::Configure(qw(
 		bundling
 		gnu_compat
