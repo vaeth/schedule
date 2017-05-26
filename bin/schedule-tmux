@@ -33,7 +33,7 @@ tmux wait-for $$ &
 # and set remain-on-exit for it.
 
 case $remain in
-[nNfF0-]*|[oO][fF]*)
+[nNfF]*|[oO][fF]*|0|-)
 	tmux new-window -d "schedule quote schedule $cmd
 schedule -a \"tmux wait-for -S $$\" $cmd";;
 *)

@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-v7.5.3_p1:
+	Martin Väth <martin at mvath.de>:
+	- schedule-tmux: Treat 0 and - as false only if no symbol follows
+
 *schedule-v7.5.3:
 	Martin Väth <martin at mvath.de>:
 	- Fix a quoting problem which caused with pie on amd64 the error:
