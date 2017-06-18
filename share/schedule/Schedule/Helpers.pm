@@ -4,11 +4,13 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Helpers v7.5.0;
+package Schedule::Helpers v7.5.4;
 
 use strict;
 use warnings;
 use integer;
+use feature 'state';
+
 use Exporter qw(import);
 
 my @export_is = qw(
@@ -49,22 +51,22 @@ sub signals {
 	$SIG{INT} = $SIG{TERM} = ((@_) ? $_[0] : 'IGNORE')
 }
 
-{ my $user = undef; # static closure
 sub my_user {
+	state $user;
 	return $user if(defined($user));
-	my $user = getpwuid($<);
+	$user = getpwuid($<);
 	$user = $< unless(&is_nonempty($user));
 	$user
-}}
+}
 
-{ my $ansicolor = undef; # A closure static variable
 sub use_ansicolor {
+	state $ansicolor;
 	return $ansicolor if(defined($ansicolor));
 	eval {
 		require Term::ANSIColor
 	};
 	$ansicolor = !$@
-}}
+}
 
 sub my_color {
 	&use_ansicolor() ? Term::ANSIColor::color(@_) : ''

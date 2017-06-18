@@ -4,11 +4,13 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Log v7.5.0;
+package Schedule::Log v7.5.4;
 
 use strict;
 use warnings;
 use integer;
+use feature 'state';
+
 #use Sys::Syslog (); # needed if --syslog is selected
 
 use Schedule::Helpers qw(join_quoted);
@@ -86,9 +88,9 @@ sub count {
 	@_ ? ($s->{count} = shift()) : $s->{count}
 }
 
-{ my $syslog = undef; # A static closure
 sub open_internal {
 	my $s = shift();
+	state $syslog;
 	if(defined($syslog) || $s->syslog()) {
 		eval {
 			require Sys::Syslog
@@ -108,7 +110,7 @@ sub open_internal {
 		}
 	}
 	$s->is_open(1)
-}}
+}
 
 sub log_internal {
 	my $s = shift();

@@ -4,11 +4,13 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Client::Cmd::Queue v7.5.0;
+package Schedule::Client::Cmd::Queue v7.5.4;
 
 use strict;
 use warnings;
 use integer;
+use feature 'state';
+
 use Cwd ();
 
 use Schedule::Client::Clientfuncs qw(:FUNCS);
@@ -35,6 +37,7 @@ sub queue_init {
 }
 
 {
+	# Global "args" for subsequent helper functions
 	my ($status, $title, $text);
 	my ($user, $host, $hosttext, $cwd, $job);
 	my $jobtext;
@@ -198,10 +201,12 @@ sub statusbar {
 	print("\033]0;$t\007") if($status);
 	print("\033k$t\033\\") if($title)
 }
+
+# End of the helper functions (global "args")
 }
 
-{ my $hostname = undef; # a static closure
 sub my_hostname {
+	state $hostname;
 	return $hostname if(defined($hostname));
 	$hostname = $ENV{'HOSTNAME'};
 	unless(&is_nonempty($hostname)) {
@@ -214,11 +219,10 @@ sub my_hostname {
 		$hostname =~ s{\c@.*$}{}
 	}
 	$hostname
-}}
+}
 
-{ my $hosttext = undef; # a static closure
 sub my_hosttext {
-	$hosttext //= $ENV{'HOSTTEXT'};
+	state $hosttext = $ENV{'HOSTTEXT'};
 	return $hosttext if(defined($hosttext));
 	my $olderr = undef;
 	$olderr = undef unless(open($olderr, '>&', \*STDERR)
@@ -228,10 +232,10 @@ sub my_hosttext {
 	chomp($hosttext);
 	$hosttext =~ s{\c@.*$}{};
 	$hosttext
-}}
+}
 
-{ my $cwd = undef; # a static closure
 sub my_cwd {
+	state $cwd;
 	return $cwd if(defined($cwd));
 	$cwd = (Cwd::getcwd() // '');
 	unless($_[0]) {
@@ -246,6 +250,6 @@ sub my_cwd {
 	}
 	$cwd =~ s{\c@.*$}{};
 	$cwd
-}}
+}
 
 1;

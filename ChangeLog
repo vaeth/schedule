@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-v7.5.4:
+	Martin Väth <martin at mvath.de>:
+	- Use state instead of static closures
+
 *schedule-v7.5.3_p1:
 	Martin Väth <martin at mvath.de>:
 	- schedule-tmux: Treat 0 and - as false only if no symbol follows

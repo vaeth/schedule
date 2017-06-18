@@ -4,11 +4,13 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Client::Clientfuncs v7.5.0;
+package Schedule::Client::Clientfuncs v7.5.4;
 
 use strict;
 use warnings;
 use integer;
+use feature 'state';
+
 use Exporter qw(import);
 use IO::Socket 1.19 (); # INET or UNIX, depending on user's choice
 
@@ -56,8 +58,6 @@ sub client_globals {
 	$s
 }
 
-{ # A static variable:
-	my $checked = '';
 sub openclient {
 	$socket = $s->timeout($s->tcp() ? sub { IO::Socket::INET->new(
 		PeerAddr => $s->addr(),
@@ -79,6 +79,7 @@ sub openclient {
 			unless($silence);
 		return ''
 	}
+	state $checked = '';
 	return 1 if($checked);
 	my $ver;
 	if(&client_send('version') && &client_recv($ver) &&
@@ -89,7 +90,7 @@ sub openclient {
 		return ''
 	}
 	$checked = 1
-}}
+}
 
 sub check_server_version {
 	my ($v) = @_;

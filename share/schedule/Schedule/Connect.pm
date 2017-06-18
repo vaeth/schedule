@@ -7,11 +7,13 @@
 # common parts of schedule and schedule-server which are always needed
 
 BEGIN { require 5.012 }
-package Schedule::Connect v7.5.3;
+package Schedule::Connect v7.5.4;
 
 use strict;
 use warnings;
 use integer;
+use feature 'state';
+
 use Getopt::Long 2.24 ();
 use File::Spec ();
 use IO::Select ();
@@ -48,11 +50,16 @@ my $serversupallowed = '';
 # For modules not appearing here, the above defaults apply.
 # If "undefined", no corresponding restriction is required.
 
-my $version753 = $VERSION; #  version->declare('v7.5.3')
+my $version753 = version->declare('v7.5.3');
+my $version754 = $VERSION;
 my %minversion = (
 # temporary:
 	'Schedule' => $version753,
 	'ScheduleServer' => $version753,
+	'Schedule::Client::Clientfuncs' => $version754,
+	'Schedule::Client::Cmd::Queue' => $version754,
+	'Schedule::Helpers' => $version754,
+	'Schedule::Log' => $version754,
 
 # Keep the following always:
 	'Schedule::Connect' => undef
@@ -250,21 +257,18 @@ sub warning {
 		join("\n" . (' ' x $len), @_), "\n")
 }
 
-{ # some static closures
-	my $reset_col = undef;
-	my $name_col = undef;
-	my $warn_col = undef;
-	my $err_col = undef;
 sub incolor {
 	my $s = shift();
 	my $mode = shift();
-	$reset_col //= &my_color('reset');
+	state $reset_col = &my_color('reset');
+	state $name_col;
 	return (($name_col //= &my_color('bold')) . $_[0] . $reset_col)
 		unless($mode);
+	state ($warn_col, $err_col);
 	($mode == 1) ?
 		(($warn_col //= &my_color('bold cyan')) . $_[0] . $reset_col) :
 		(($err_col //= &my_color('bold red')) . $_[0] . $reset_col)
-}}
+}
 
 sub check_version {
 	my $s = shift();
