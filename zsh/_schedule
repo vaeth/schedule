@@ -55,6 +55,7 @@ case $service in
 	service_opts+=(
 {'(--exit)-e+','(-e)--exit='}'[set specified exitstatus]:exitstatus:(0)'
 {'(--job)-j+','(-j)--job='}'[JOB (set jobnumber)]:jobnumber:(0)'
+{'(--command-text)-C+','(-C)--command-text='}'[specify command text (accumulative)]:command text:()'
 '(--immediate -I '{'--ignore)-i+','-i)--ignore='}'[force specified exitstatus]:exitstatus:(0)'
 '(--ignore -i '{'--immediate)-I+','-I)--immediate='}'[report immediately specified status)]:exitstatus:(0)'
 '(--no-host --nohost -H '{'--no-user --nouser)-u','--nouser -u)--no-user','--no-user -u)--nouser'}'[Suppress output of user]'

@@ -7,7 +7,7 @@
 # common parts of schedule and schedule-server which are always needed
 
 BEGIN { require 5.012 }
-package Schedule::Connect v7.5.4;
+package Schedule::Connect v7.6.0;
 
 use strict;
 use warnings;
@@ -51,13 +51,15 @@ my $serversupallowed = '';
 # If "undefined", no corresponding restriction is required.
 
 my $version753 = version->declare('v7.5.3');
-my $version754 = $VERSION;
+my $version754 = version->declare('v7.5.3');
+my $version760 = $VERSION;
 my %minversion = (
 # temporary:
-	'Schedule' => $version753,
+	'Schedule' => $version760,
 	'ScheduleServer' => $version753,
 	'Schedule::Client::Clientfuncs' => $version754,
-	'Schedule::Client::Cmd::Queue' => $version754,
+	'Schedule::Client::Cmd::Queue' => $version760,
+	'Schedule::Client::Scheduleman' => $version760,
 	'Schedule::Helpers' => $version754,
 	'Schedule::Log' => $version754,
 

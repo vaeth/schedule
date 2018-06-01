@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Client::Cmd::Queue v7.5.4;
+package Schedule::Client::Cmd::Queue v7.6.0;
 
 use strict;
 use warnings;
@@ -44,7 +44,8 @@ sub queue_init {
 sub queue {
 	&queue_init();
 	(my $runmode, $destjob, $cancel, my $ignore, my $immediate,
-		my $keepdir, my $tests, $status, $title, $text) = @_;
+		my $keepdir, my $tests, $status, $title, $text,
+		my @commandtext) = @_;
 	$s->fatal("illegal --ignore $ignore") if(defined($ignore) &&
 		!(&is_nonnegative($ignore) && $ignore <= 0xFF));
 	$s->fatal("illegal --immediate $immediate") if(defined($immediate) &&
@@ -77,7 +78,8 @@ sub queue {
 	($user, $host, $hosttext, $cwd) =
 		(&my_user(), &my_hostname, &my_hosttext, &my_cwd($keepdir));
 	my $success = &client_send(join("\c@", $runmode, $destjob, $user,
-		$host, $hosttext, $cwd, @ARGV));
+		$host, $hosttext, $cwd,
+		((@commandtext) ? (@commandtext) : (@ARGV))));
 	$success = '' unless(&client_recv($unique));
 	if($query) {
 		$unique =~ m{^([^\c@]*)\c@(.*)};
@@ -118,6 +120,11 @@ sub queue {
 		&signals()
 	}
 	&statusbar('running');
+	if ($job ne '') {
+		$ENV{'SCHEDULE_JOB'} = $job
+	} else {
+		delete($ENV{'SCHEDULE_JOB'})
+	}
 	my $sys = system(@ARGV);
 	if($sys < 0) {
 		$s->error($jobtext . ' could not be executed') unless($s->quiet());

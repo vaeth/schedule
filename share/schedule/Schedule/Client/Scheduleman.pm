@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Client::Scheduleman v7.5.0;
+package Schedule::Client::Scheduleman v7.6.0;
 
 use strict;
 use warnings;
@@ -136,8 +136,20 @@ When both are succesfully finished, B<shutdown -h now> is executed.
 Queue I<cmd> I<arg> ... I<arg> for execution.
 The command will be executed using perl's system(I<cmd>, I<arg>, ..., I<arg>).
 
-The following environment variables are used for later output with
-B<schedule list>:
+The queued job will receive the environment variable B<SCHEDULE_JOB>
+which contains the address of the job.
+If the job wants to know the (current) job number, it might use
+
+B<schedule number $SCHEDULE_JOB>
+
+but this result is subject to races (of reordering of the queue).
+It is better to use B<$SCHEDULE_JOB> (with possibly a relative offset)
+instead if possible, see the section B<SPECIFYING JOBS> for more details.
+
+When a new job is queued also the output for B<schedule list> is stored.
+The content of the command in this output can be modified during queueing
+with the B<--command-text> option, and the following environment variables
+are used to modify some other details.
 
 =over 16
 
@@ -285,7 +297,7 @@ the command acts as if the argument B<:> is given for I<jobs>.
 If the exit status is nonzero, it is the maximum of B<1> and of all exit values
 of jobs specified through B<--ok>.
 
-=item B<remove> I<jobs>
+=item B<remove> I<jobs> or B<delete> I<jobs>
 
 Remove I<jobs> from the list of B<queued> jobs and let them exit (with the
 exit status specified by B<--exit> if that value is nonzero).
@@ -293,7 +305,12 @@ exit status specified by B<--exit> if that value is nonzero).
 Note that if the job is already started it is not stopped, but its exit status
 cannot be queried through B<schedule> anymore.
 
-=item B<insert> I<jobs>
+Be aware that removing a job renumbers all subsequent jobs in the queue.
+It is intentional that commands like B<schedule run> are not informed about
+this renumbering so that B<remove> and B<insert> can be used to modify the
+order of the running queue.
+
+=item B<insert> I<jobs> or B<move> I<jobs>
 
 The list of queued jobs is ordered differently by shifting all specified I<jobs>
 to to the location specified with B<--job>. Thus, if B<--job=1>,
@@ -302,6 +319,13 @@ previously first jobs). The special value B<--job=0> (default)
 means to shift to the end of the list, and negative numbers count from the
 end of the list. For instance B<schedule --job=-1 insert :2> will shift the
 first two jobs one command before the end of the list.
+
+Be aware that this command can renumber many commands in the queue.
+For instance, when moving the first job to the end, all commands obtain
+different numbers.
+It is intentional that commands like B<schedule run> are not informed about
+this renumbering so that B<remove> and B<insert> can be used to modify the
+order of the running queue.
 
 =item B<cancel> I<jobs>
 
@@ -395,6 +419,8 @@ This means e.g. that B<schedule queue> will by default queue new jobs after
 the end of the queue while e.g. B<schedule insert> will shift the selected
 jobs (in their order of selection) to the end of the queue.
 
+I<jobnr> can either be a number or a (relative) job address.
+
 =item B<--ok=>I<jobs> or B<-o> I<jobs>
 
 This option can be used repeatedly; all arguments are collected.
@@ -476,7 +502,7 @@ and discards all subsequent standard input/output.
 
 This is like B<--daemon>, but fully detaches from terminal, discarding also
 error output. To use this option, your perl must have a functioning POSIX.
-To avoid unexpected issues with relatice paths, the current working directory
+To avoid unexpected issues with relative paths, the current working directory
 is kept (and thus remains occupied). Therefore you might want to change to the
 root directory before using this option.
 
@@ -576,6 +602,15 @@ The following substitutions are made in I<format>:
 =back
 
 The default I<format> is: B<%a(%s)%u@%h%H:%c>
+
+=item B<--command-text=>I<text> or B<-C> I<text>
+
+When queuing or starting a command, instruct the server to lie about the
+actual command: Let it act as if I<text> was the specified command.
+If this option is used several times, the subsequent I<text> is treated
+as argument to the given command.
+The intention is to allow scripts queuing commands to give useful "comments"
+(e.g. if they just schedule a dummy command like "true").
 
 =item B<--exit=>I<exitstatus> or B<-e> I<exitstatus>
 
@@ -702,11 +737,12 @@ If you specify the number 0 or a negative number, the counting is backwards
 from the queue.
 
 Note that the association of a number to the job can change when you rearrange
-the queue (by the B<insert> or B<delete> command or by queuing new jobs
+the queue (by the B<insert> or B<remove> command or by queuing new jobs
 not at the end of the queue).
 For this reason, there is also a possibility to specify jobs by their
 addresses. A job address has the form B<@>I<number> and can be seen by
-the output of the B<list> or B<address> command.
+the output of the B<list> or B<address> command and is also exported in
+the B<SCHEDULE_JOB> environment variable to the corresponding job.
 Such a job address does never change. However, it can become invalid:
 If the job is removed from the queue, the address becomes invalid.
 

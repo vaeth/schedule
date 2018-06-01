@@ -1,5 +1,12 @@
 # ChangeLog for schedule
 
+*schedule-v7.6.0:
+	Martin Väth <martin at mvath.de>:
+	- export SCHEDULE_JOB to queued jobs
+	- allow (relative) job address for -j
+	- new option --command-text
+	- manpage: explain side effects of remove and insert more verbosely
+
 *schedule-v7.5.4:
 	Martin Väth <martin at mvath.de>:
 	- Use state instead of static closures
