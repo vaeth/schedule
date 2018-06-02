@@ -3,7 +3,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule v7.6.0;
+package Schedule v8.0.0;
 
 use strict;
 use warnings;
@@ -24,7 +24,7 @@ use File::Spec ();
 
 use lib '/usr/share/schedule';
 use FindBin;
-if(($FindBin::Bin // '') ne '') {
+if (($FindBin::Bin // '') ne '') {
 	use lib File::Spec->catdir($FindBin::Bin, File::Spec->updir(),
 		'share', 'schedule');
 	use lib File::Spec->catdir($FindBin::Bin, 'share', 'schedule');
@@ -48,6 +48,7 @@ my $nouser = '';
 my $nohost = '';
 my $nodir = '';
 my $nocommand = '';
+my $nopausing = '';
 my @commandtext = ();
 my $keepdir = '';
 my $destjob = 0;
@@ -64,7 +65,7 @@ my $etime = '->%T %d.%m.%y';
 #
 
 sub cmd_queue {
-	exit(6) if($s->check());
+	exit(6) if ($s->check());
 	require Schedule::Client::Cmd::Queue;
 	&Schedule::Client::Cmd::Queue::queue(@_,
 		$destjob, $cancel, $ignore, $immediate, $keepdir, $tests,
@@ -87,8 +88,9 @@ sub cmd_list {
 	$s->check_queue();
 	require Schedule::Client::Cmd::List;
 	&Schedule::Client::Cmd::List::list(@_,
-		$nouser, $nohost, $nodir, $nocommand,
-		$qtime, $stime, $etime)
+		$nouser, $nohost, $nodir, $nocommand, $qtime, $stime, $etime)
+		&& ($nopausing || &cmd_pause('test-pausing',
+			"Server is in pausing state!\n"))
 }
 
 sub cmd_test {
@@ -121,6 +123,12 @@ sub cmd_insert {
 	&Schedule::Client::Cmd::Insert::insert($destjob)
 }
 
+sub cmd_pause {
+	$s->check_queue();
+	require Schedule::Client::Cmd::Pause;
+	&Schedule::Client::Cmd::Pause::pause(@_)
+}
+
 sub cmd_quote {
 	$s->check_queue();
 	print(&join_quoted(@ARGV), "\n")
@@ -133,7 +141,7 @@ sub cmd_quote {
 sub check_file {
 	my $default = $s->default_filename();
 	my $file = $s->file();
-	return 1 if(-S $file);
+	return 1 if (-S $file);
 	$s->error("no socket $file exists", 'maybe you should run first: ' .
 		&join_quoted('schedule-server', '--daemon',
 			($default ? '-l' : ('-f', $file))));
@@ -144,7 +152,7 @@ sub check_file {
 # Now the main program:
 #
 
-if(exists($ENV{'SCHEDULE_OPTS'})) {
+if (exists($ENV{'SCHEDULE_OPTS'})) {
 	unshift(@ARGV, &env_to_array('SCHEDULE_OPTS'))
 }
 
@@ -159,6 +167,7 @@ $s->get_options(
 	'no-host|nohost|H', \$nohost,
 	'no-dir|nodir|D', \$nodir,
 	'no-command|nocommand|c', \$nocommand,
+	'no-pausing|nopausing', \$nopausing,
 	'keep-dir|keepdir|d', \$keepdir,
 	'ignore|i=i', \$ignore,
 	'immediate|I=i', \$immediate,
@@ -182,8 +191,8 @@ $s->get_options(
 
 $s->check_options();
 $s->fatal("illegal --exit $cancel")
-	unless(&is_nonnegative($cancel) && $cancel <= 0xFF);
-&check_file() unless($s->tcp());
+	unless (&is_nonnegative($cancel) && $cancel <= 0xFF);
+&check_file() unless ($s->tcp());
 
 # Load main functions:
 
@@ -194,45 +203,51 @@ Schedule::Client::Clientfuncs->import(qw(:INIT));
 # Process command:
 my $action = shift(@ARGV) // '';
 my $ret;
-if($action =~ m{^sto}i) {
+if ($action =~ m{^sto}i) {
 	$ret = &cmd_stop_server()
-} elsif($action =~ m{^(?:re|d)}i) {
+} elsif ($action =~ m{^(?:re|d)}i) {
 	$ret = &cmd_remove()
-} elsif($action =~ m{^r}i) {
+} elsif ($action =~ m{^r}i) {
 	$ret = &cmd_run('run')
-} elsif($action =~ m{^(?:e|x)}i) {
+} elsif ($action =~ m{^(?:e|x)}i) {
 	$ret = &cmd_run('exec')
-} elsif($action =~ m{^b}i) {
+} elsif ($action =~ m{^b}i) {
 	$ret = &cmd_parallel('')
-} elsif($action =~ m{^p}i) {
+} elsif ($action =~ m{^pau}i) {
+	$ret = &cmd_pause('pause')
+} elsif ($action =~ m{^p}i) {
 	$ret = &cmd_parallel(1)
-} elsif($action =~ m{^w}i) {
+} elsif ($action =~ m{^w}i) {
 	$ret = &cmd_run('wait')
-} elsif($action =~ m{^l}i) {
+} elsif ($action =~ m{^l}i) {
 	$ret = &cmd_list('list')
-} elsif($action =~ m{^stat}i) {
+} elsif ($action =~ m{^stat}i) {
 	$ret = &cmd_list('status')
-} elsif($action =~ m{^a}i) {
+} elsif ($action =~ m{^a}i) {
 	$ret = &cmd_list('address')
-} elsif($action =~ m{^n}i) {
+} elsif ($action =~ m{^n}i) {
 	$ret = &cmd_list('number')
-} elsif($action =~ m{^o}i) {
+} elsif ($action =~ m{^t}i) {
+	$ret = &cmd_pause('test-pausing', "1\n")
+} elsif ($action =~ m{^o}i) {
 	$ret = &cmd_test($tests, 0)
-} elsif($action =~ m{^f}i) {
+} elsif ($action =~ m{^f}i) {
 	$ret = &cmd_test($tests, 1)
-} elsif($action =~ m{^starte}i) {
+} elsif ($action =~ m{^starte}i) {
 	$ret = &cmd_test($tests, 2)
-} elsif($action =~ m{^(?:i|m|sh)}i) {
+} elsif ($action =~ m{^(?:i|m|sh)}i) {
 	$ret = &cmd_insert()
-} elsif($action =~ m{^quote$}i) {
+} elsif ($action =~ m{^quote$}i) {
 	$ret = &cmd_quote()
-} elsif($action =~ m{q.*s|s.*q}i) {
+} elsif ($action =~ m{q.*s|s.*q}i) {
 	$ret = &cmd_queue('start-or-queue')
-} elsif($action =~ m{^q}i) {
+} elsif ($action =~ m{^q}i) {
 	$ret = &cmd_queue('queue')
-} elsif($action =~ m{^s}i) {
+} elsif ($action =~ m{^s}i) {
 	$ret = &cmd_queue('start')
-} elsif($action =~ m{^c}i) {
+} elsif ($action =~ m{^(?:co|u)}i) {
+	$ret = &cmd_pause('continue')
+} elsif ($action =~ m{^c}i) {
 	$ret = &cmd_cancel()
 } else {
 	$s->usage(2)

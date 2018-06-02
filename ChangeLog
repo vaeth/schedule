@@ -1,5 +1,11 @@
 # ChangeLog for schedule
 
+*schedule-v8.0.0:
+	Martin Väth <martin at mvath.de>:
+	- new commands pause, continue, test-pause, --no-pausing to avoid races
+	- bump all file versions to 8.0.0
+	- style changes (space after flow control commands; ChangeLog style)
+
 *schedule-v7.6.0:
 	Martin Väth <martin at mvath.de>:
 	- export SCHEDULE_JOB to queued jobs
@@ -9,7 +15,7 @@
 
 *schedule-v7.5.4:
 	Martin Väth <martin at mvath.de>:
-	- Use state instead of static closures
+	- use state instead of static closures
 
 *schedule-v7.5.3_p1:
 	Martin Väth <martin at mvath.de>:
@@ -17,7 +23,7 @@
 
 *schedule-v7.5.3:
 	Martin Väth <martin at mvath.de>:
-	- Fix a quoting problem which caused with pie on amd64 the error:
+	- fix a quoting problem which caused with pie on amd64 the error:
 	  Hexadecimal number > 0xffffffff non-portable at (eval 1) line 1
 
 *schedule-v7.5.2:
@@ -34,7 +40,7 @@
 
 *schedule-v7.5.0:
 	Martin Väth <martin at mvath.de>:
-	- Rename lib/ -> shared/schedule/ in distribution and path search
+	- rename lib/ -> shared/schedule/ in distribution and path search
 	- systemd: Cleanly stop, hoping that new timeout fixes the issues
 	- openrc: Decrease suggested timeout (symmetric to systemd)
 	- schedule man: Fix marking in SYNOPSIS
@@ -43,50 +49,50 @@
 
 *schedule-v7.4.0:
 	Martin Väth <martin at mvath.de>:
-	- Use timeout also when opening the socket (previously, e.g.
+	- use timeout also when opening the socket (previously, e.g.
 	  an iptables block could have caused a deadlock)
-	- Use timeout also when sending
-	- Use additional alarm protection when sending and receiving
-	- Clarify description of --timeout on manpages
-	- Improve negative test for SCHEDULE_REMAIN
+	- use timeout also when sending
+	- use additional alarm protection when sending and receiving
+	- clarify description of --timeout on manpages
+	- improve negative test for SCHEDULE_REMAIN
 	- openrc: Explicitly set timeout for stopping in conf.d
 
 *schedule-v7.3.0:
 	Martin Väth <martin at mvath.de>:
-	- Improve security in provided systemd unit
+	- improve security in provided systemd unit
 
 *schedule-v7.2.2:
 	Martin Väth <martin at mvath.de>:
-	- Syntactic micro-optimizations
-	- Allow server of v7.2.0
+	- syntactic micro-optimizations
+	- allow server of v7.2.0
 
 *schedule-v7.2.1:
 	Martin Väth <martin at mvath.de>:
-	- Fix "core dumped" message
+	- fix "core dumped" message
 
 *schedule-v7.2.0:
 	Martin Väth <martin at mvath.de>:
-	- Increase magic checksum for password verification to 496 bit
+	- increase magic checksum for password verification to 496 bit
 	  to be reasonably secure against DOS attacks with random data
 
 *schedule-v7.1.1:
 	Martin Väth <martin at mvath.de>:
-	- Fix queuing of empty jobs
+	- fix queuing of empty jobs
 
 *schedule-v7.1.0:
 	Martin Väth <martin at mvath.de>:
-	- Fix loglevel severity 'warning'
+	- fix loglevel severity 'warning'
 	  Security fix! (DOS: let server finish without knowing the password)
-	- Check for correct Server::Serverfuncs version
-	- Let shell script run with set -u
+	- check for correct Server::Serverfuncs version
+	- let shell script run with set -u
 
 *schedule-v7.0.5:
 	Martin Väth <martin at mvath.de>:
-	- Avoid redundant quoting in shell scripts
+	- avoid redundant quoting in shell scripts
 
 *schedule-v7.0.4:
 	Martin Väth <martin at mvath.de>:
-	- Fix start-stop-daemon usage for openrc
+	- fix start-stop-daemon usage for openrc
 
 *schedule-v7.0.3:
 	Martin Väth <martin at mvath.de>:
@@ -94,64 +100,64 @@
 
 *schedule-v7.0.2:
 	Martin Väth <martin at mvath.de>:
-	- Support separate start/stop options for openrc
+	- support separate start/stop options for openrc
 
 *schedule-v7.0.1:
 	Martin Väth <martin at mvath.de>:
-	- Use openrc-run instead of deprecated runscript
+	- use openrc-run instead of deprecated runscript
 
 *schedule-v7.0.0:
 	Martin Väth <martin at mvath.de>:
-	- Support logging (to syslog as well as to file)
-	- Use logging in startup scripts
+	- support logging (to syslog as well as to file)
+	- use logging in startup scripts
 	- require_order of options (regression from v6.3.1)
-	- Bump all file versions to 7.0.0
+	- bump all file versions to 7.0.0
 
 *schedule-v6.3.1:
 	Martin Väth <martin at mvath.de>:
-	- Change --qtime default to %R (no seconds)
-	- Use gnu_getopt
+	- change --qtime default to %R (no seconds)
+	- use gnu_getopt
 
 *schedule-v6.3.0:
 	Martin Väth <martin at mvath.de>:
-	- Record and output queue/start/end time (with corresponding options)
+	- record and output queue/start/end time (with corresponding options)
 	- internal: remove wrong prototypes in function definitions
 	- internal: slightly simplify --text parsing
 
 *schedule-v6.2.1:
 	Martin Väth <martin at mvath.de>:
-	- Use only recommended obj-syntax (no new ...)
-	- Document versioning and that lib/Schedule/Connect.pm is version file
+	- use only recommended obj-syntax (no new ...)
+	- document versioning and that lib/Schedule/Connect.pm is version file
 
 *schedule-v6.2.0:
 	Martin Väth <martin at mvath.de>:
-	- Support socket-based activation of (x)inetd/systemd.
+	- support socket-based activation of (x)inetd/systemd.
 	  Thanks a lot to Christian Mock <cm at tahina.priv.at> for explaining
 	  how to convert a file descriptor into an IO::Socket object
-	- Fix ignoring of signals
+	- fix ignoring of signals
 
 *schedule-v6.1.0:
 	Martin Väth <martin at mvath.de>:
-	- Default user/group is now "schedule"; "nobody" is only a fallback
-	- Slurp the whole password file in binary mode (but chomp()) so that
+	- default user/group is now "schedule"; "nobody" is only a fallback
+	- slurp the whole password file in binary mode (but chomp()) so that
 	  multiline or binary passwords can be used
-	- Ignore signals HUP, PIPE, USR1, USR2
-	- Work around bugs of the broken systemd
+	- ignore signals HUP, PIPE, USR1, USR2
+	- work around bugs of the broken systemd
 
 *schedule-v6.0.2:
 	Martin Väth <martin at mvath.de>:
-	- Replace 'EOF' by 1 to avoid stupid new perl warning
+	- replace 'EOF' by 1 to avoid stupid new perl warning
 
 *schedule-v6.0.1:
 	Martin Väth <martin at mvath.de>:
-	- Use perl-5.12 package versioning
-	- Require correct minimal versions of perl and its modules
+	- use perl-5.12 package versioning
+	- require correct minimal versions of perl and its modules
 
 *schedule-v6.0.0:
 	Martin Väth <martin at mvath.de>:
-	- Pass to dotted-decimal version format and be more permissive
-	- Fix output of error/warning messages
-	- Fix behaviour in too early fatal errors
+	- pass to dotted-decimal version format and be more permissive
+	- fix output of error/warning messages
+	- fix behaviour in too early fatal errors
 
 *schedule-5.3:
 	Martin Väth <martin at mvath.de>:
@@ -165,17 +171,17 @@
 
 *schedule-5.1:
 	Martin Väth <martin at mvath.de>:
-	- Set status line/windows title. Introduce corresponding options:
+	- set status line/windows title. Introduce corresponding options:
 	- --{no-,}status --{no-,}title --text=...
 	- schedule-tmux: support man; error out if unknown command is used
 	- schedule-tmux: support --{no-,}remain and make --remain the default
 	- schedule-tmux is now a POSIX shell script
-	- Provide shell helper "schedule quote"
+	- provide shell helper "schedule quote"
 
 *schedule-5.0:
 	Martin Väth <martin at mvath.de>:
-	- Provide schedule-tmux script
-	- Provide --alpha, --alpha-ignore, --ignore, --immediate
+	- provide schedule-tmux script
+	- provide --alpha, --alpha-ignore, --ignore, --immediate
 	- schedule: fix race with --bg run/exec
 	- schedule-server: fix bugs in permission handling
 	- schedule-server: fix race with --bg/--daemon
@@ -183,23 +189,23 @@
 
 *schedule-4.2:
 	Martin Väth <martin at mvath.de>:
-	- Fix manpage handling
+	- fix manpage handling
 
 *schedule-4.1:
 	Martin Väth <martin at mvath.de>:
-	- Fix exit status reporting (regression of schedule-4.0)
+	- fix exit status reporting (regression of schedule-4.0)
 	- start/queue: print job address and exit status to stdout unless quiet
-	- Split job list arguments
-	- Slightly reorganize modules
+	- split job list arguments
+	- slightly reorganize modules
 	- zsh-completion: fix --file
 
 *schedule-4.0:
 	Martin Väth <martin at mvath.de>:
-	- Split into modules to minimize memory footprint
+	- split into modules to minimize memory footprint
 
 *schedule-3.1:
 	Martin Väth <martin at mvath.de>:
-	- Protocoll cleanup (\0 separators), making data sanitizing superfluous
+	- protocoll cleanup (\0 separators), making data sanitizing superfluous
 	- minor code cleanup
 	- man: document HOSTNAME etc
 	- man: document --exit and cancel in more detail
@@ -207,7 +213,7 @@
 
 *schedule-3.0:
 	Martin Väth <martin at mvath.de>:
-	- Support job addresses, job address ranges (also relative ones)
+	- support job addresses, job address ranges (also relative ones)
 	- list displays now job addresses
 	- list handles --quiet differently
 	- status does not imply --quiet
@@ -215,113 +221,113 @@
 
 *schedule-2.2:
 	Martin Väth <martin at mvath.de>:
-	- Support nonpositive numbers in all job ranges; explain consequences
+	- support nonpositive numbers in all job ranges; explain consequences
 
 *schedule-2.1:
 	Martin Väth <martin at mvath.de>:
-	- Fix checks for ranges
+	- fix checks for ranges
 
 *schedule-2.0:
 	Martin Väth <martin at mvath.de>:
-	- Let exec, run, wait support static jobs and static job ranges to
+	- let exec, run, wait support static jobs and static job ranges to
 	  "cancel" the race condition as desired
-	- Make parallel and bg race-free, parallel waiting only for the
+	- make parallel and bg race-free, parallel waiting only for the
 	  processes just started
-	- Let --daemon not discard stderr (in contrast to --detach)
-	- New server option -q: make server more verbose if -q is not passed
-	- Improve list output
+	- let --daemon not discard stderr (in contrast to --detach)
+	- new server option -q: make server more verbose if -q is not passed
+	- improve list output
 	- internal restructure of server loop
 
 *schedule-1.1:
 	Martin Väth <martin at mvath.de>:
-	- Introduce --bg, --daemon
-	- Make the communication protocol safe concerning message length
-	- Due to the previous change, strange communication bugs for some
+	- introduce --bg, --daemon
+	- make the communication protocol safe concerning message length
+	- due to the previous change, strange communication bugs for some
 	  commands are now fixed. For instance, when using encryption,
 	  "schedule exec" was failing when looping over more than one process
-	- Do not set executable bit on libraries
+	- do not set executable bit on libraries
 
 *schedule-1.0:
 	Martin Väth <martin at mvath.de>:
-	- Strengthen encryption by using random first blocks; this should
+	- strengthen encryption by using random first blocks; this should
 	  greatly reduce known plaintext attacks by MITM
 
 *schedule-0.15:
 	Martin Väth <martin at mvath.de>:
-	- Introduce encryption: --password --passfile
+	- introduce encryption: --password --passfile
 
 *schedule-0.14:
 	Martin Väth <martin at mvath.de>:
-	- Support CWD; introduce --nodir
-	- Support HOSTTEXT (default to uname -m); introduce --nohost
-	- Improve zsh completion
+	- support CWD; introduce --nodir
+	- support HOSTTEXT (default to uname -m); introduce --nohost
+	- improve zsh completion
 
 *schedule-0.13:
 	Martin Väth <martin at mvath.de>:
-	- Fix zsh completion
+	- fix zsh completion
 
 *schedule-0.12:
 	Martin Väth <martin at mvath.de>:
-	- Introduce --no-user --no-command to customize list output
+	- introduce --no-user --no-command to customize list output
 
 *schedule-0.11:
 	Martin Väth <martin at mvath.de>:
-	- Support for colored ouput (if Term::ANSIColor is available)
-	- Try to set process name more appropriately
+	- support for colored ouput (if Term::ANSIColor is available)
+	- try to set process name more appropriately
 
 *schedule-0.10:
 	Martin Väth <martin at mvath.de>:
-	- Add --ok, --finished, --started to start-or-queue
-	- Add query commands: ok, finished, started
-	- Add [user@host] to job listing
-	- Fix crash in signal handling (regression from 0.8)
-	- Fix crash with -l (regression from 0.8)
-	- Fix interpretation/checking of job numbers/ranges in some cases
-	- Use serverid so that orphant jobs cannot confuse a restarted server
-	- Improve message of schedule -l if server cannot be found
+	- add --ok, --finished, --started to start-or-queue
+	- add query commands: ok, finished, started
+	- add [user@host] to job listing
+	- fix crash in signal handling (regression from 0.8)
+	- fix crash with -l (regression from 0.8)
+	- fix interpretation/checking of job numbers/ranges in some cases
+	- use serverid so that orphant jobs cannot confuse a restarted server
+	- improve message of schedule -l if server cannot be found
 	- README: First example with unqueued shutdown command
 
 *schedule-0.9:
 	Martin Väth <martin at mvath.de>:
-	- Introduce start-or-queue and even recommend its usage by mentioning
+	- introduce start-or-queue and even recommend its usage by mentioning
 	  it in the main examples
 
 *schedule-0.8:
 	Martin Väth <martin at mvath.de>:
-	- Allow unquoted environment variables inside environment variables
-	- Use library for common functions, putting connection data to a class
+	- allow unquoted environment variables inside environment variables
+	- use library for common functions, putting connection data to a class
 
 *schedule-0.7:
 	Martin Väth <martin at mvath.de>:
-	- Do not allow permutation of options with arguments:
+	- do not allow permutation of options with arguments:
 	  This simplifies passing options to commands or negative job numbers
 
 *schedule-0.6:
 	Martin Väth <martin at mvath.de>:
-	- Fix bug in signal handling: cancel always correct job
-	- Fix exit status of some commands like "schedule run"
-	- Let 0 be the last job (instead of last job + 1) for
+	- fix bug in signal handling: cancel always correct job
+	- fix exit status of some commands like "schedule run"
+	- let 0 be the last job (instead of last job + 1) for
 	  certain commands (run, bg, wait, cancel, list, status)
-	- Send message length for nontrivial tasks
+	- send message length for nontrivial tasks
 
 *schedule-0.5:
 	Martin Väth <martin at mvath.de>:
-	- Introduce SCHEDULE_OPTS and SCHEDULE_SERVER_OPTS
-	- Quote newlines correctly
+	- introduce SCHEDULE_OPTS and SCHEDULE_SERVER_OPTS
+	- quote newlines correctly
 
 *schedule-0.4:
 	Martin Väth <martin at mvath.de>:
-	- Support optionally Unix domain sockets instead of TCP sockets
-	- Improve README, giving hints about security
+	- support optionally Unix domain sockets instead of TCP sockets
+	- improve README, giving hints about security
 
 *schedule-0.3:
 	Martin Väth <martin at mvath.de>:
-	- Handle timeouts
+	- handle timeouts
 
 *schedule-0.2:
 	Martin Väth <martin at mvath.de>:
-	- Startup server as nobody. Fix openrc init
+	- startup server as nobody. Fix openrc init
 
 *schedule-0.1:
 	Martin Väth <martin at mvath.de>:
-	- Start from scratch, motivated by https://github.com/vaeth/starter/
+	- start from scratch, motivated by https://github.com/vaeth/starter/

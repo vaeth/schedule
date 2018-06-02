@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Client::Testarg v7.5.0;
+package Schedule::Client::Testarg v8.0.0;
 
 use strict;
 use warnings;
@@ -36,7 +36,7 @@ sub test_empty {
 	my ($tests) = @_;
 	my $ret = 1;
 	for my $a (@$tests) {
-		$ret = '' if(&validate_args($a))
+		$ret = '' if (&validate_args($a))
 	}
 	$ret
 }

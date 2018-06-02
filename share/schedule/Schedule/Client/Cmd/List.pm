@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Client::Cmd::List v7.5.0;
+package Schedule::Client::Cmd::List v8.0.0;
 
 use strict;
 use warnings;
@@ -55,29 +55,29 @@ sub list {
 	my $last = undef;
 	my $is_open = '';
 	my $send = $type;
-	$send = 'status' if($type ne 'list');
+	$send = 'status' if ($type ne 'list');
 	$send .= "\c@";
 	for my $a (@ARGV) {
-		for(my $iter = Schedule::Client::Iterator->new($a, \$last, \$is_open);
+		for (my $iter = Schedule::Client::Iterator->new($a, \$last, \$is_open);
 			$iter->unfinished(); $iter->increase()) {
-			return '' unless($is_open || &openclient());
+			return '' unless ($is_open || &openclient());
 			$is_open = 1;
 			my $reply;
-			return '' unless(&client_send($send . $iter->current()) &&
+			return '' unless (&client_send($send . $iter->current()) &&
 				&client_recv($reply) &&
 				($reply =~ s{^(\d+)\c@?}{}));
 			my $job = $1;
 			my ($addr, $stat, $found);
 			my $quiet = ($s->quiet());
 			my @times = ();
-			if($job eq '0') {
+			if ($job eq '0') {
 				$found = '';
 				my $no_error = (($type eq 'number') ||
 					($type eq 'address') ||
 					(($type eq 'status') && !$quiet));
-				last unless($iter->cond_error($quiet ||
+				last unless ($iter->cond_error($quiet ||
 					$no_error));
-				unless($no_error) {
+				unless ($no_error) {
 					&set_exitstatus(1);
 					next
 				}
@@ -85,18 +85,18 @@ sub list {
 				$found = 1;
 				$reply =~ s{^([^\c@]*)\c@?}{};
 				$addr = ($1 // '');
-				if($type ne 'list') {
+				if ($type ne 'list') {
 					$stat = $reply
 				} else {
 					$reply =~ s{^([^\c@]*)\c@?}{};
 					$stat = ($1 // '');
-					for(my $i = 0; $i < 3; ++$i) {
+					for (my $i = 0; $i < 3; ++$i) {
 						$reply =~ s{^([^\c@]*)\c@?}{};
 						push(@times, &format_time($timeformat[$i], $1))
 					}
 				}
-				if($quiet) {
-					&set_exitstatus($stat) if($stat &&
+				if ($quiet) {
+					&set_exitstatus($stat) if ($stat &&
 						($type eq 'status'));
 					next
 				}
@@ -105,42 +105,42 @@ sub list {
 			my $reset = ($use_color ?
 				($col_reset //= &my_color('reset')) : '');
 			my $statspace = ' ';
-			if(!$found) {
+			if (!$found) {
 				$statspace = (' ' x 7);
 				$stat = '-';
-				if($use_color) {
+				if ($use_color) {
 					$col_nojob //= &my_color('bold red');
 					$stat = $col_nojob . $stat . $reset
 				}
-			} elsif($stat eq '-') {
+			} elsif ($stat eq '-') {
 				$stat = ($use_color ? ($col_waiting //=
 					&my_color('bold blue')) : '')
 					. 'waiting' . $reset
-			} elsif($stat eq '') {
+			} elsif ($stat eq '') {
 				$stat = ($use_color ? ($col_running //=
 					&my_color('bold yellow')) : '')
 					. 'running' . $reset
-			} elsif(&is_nonnegative($stat)) {
+			} elsif (&is_nonnegative($stat)) {
 				$statspace = (' ' x (8 - length($stat)));
 				$stat = ($stat ? ($col_failed //=
 					&my_color('bold red')) :
 					($col_ok //= &my_color('bold green')))
-					. $stat . $reset if($use_color)
+					. $stat . $reset if ($use_color)
 			} else {
 				$s->fatal('strange server reply');
 				return ''
 			}
-			if($type eq 'status') {
+			if ($type eq 'status') {
 				print($stat . "\n");
 				next
 			}
-			if($use_color && !defined($col_meta)) {
+			if ($use_color && !defined($col_meta)) {
 				$col_meta = &my_color('cyan');
 				$col_job = &my_color('bold');
 				$col_addr = &my_color('bold cyan')
 			}
-			if($type eq 'address') {
-				if($use_color) {
+			if ($type eq 'address') {
+				if ($use_color) {
 					print(($found ? $col_addr : $col_nojob),
 						$addr, $reset, "\n")
 				} else {
@@ -148,8 +148,8 @@ sub list {
 				}
 				next
 			}
-			if($type eq 'number') {
-				if($use_color) {
+			if ($type eq 'number') {
+				if ($use_color) {
 					print(($found ? $col_job : $col_nojob),
 						$job, $reset, "\n")
 				} else {
@@ -163,7 +163,7 @@ sub list {
 				(' ' x (4 - length($addr))) : '');
 			my $cmd = &format_cmd(1, $reply, $nouser, $nohost, $nodir, $nocommand);
 			my $times = &format_times($use_color, @times);
-			if($use_color) {
+			if ($use_color) {
 				print($jobspace, $col_job, $job, $reset,
 				$addrspace, $col_addr, $addr, $reset,
 				$statspace, $col_meta, '(', $stat,
@@ -174,7 +174,7 @@ sub list {
 			}
 		}
 	}
-	return 1 unless($is_open);
+	return 1 unless ($is_open);
 	&client_send('close')
 }
 
@@ -183,17 +183,17 @@ sub list {
 sub format_cmd {
 	my ($use_color, $data, $nouser, $nohost, $nodir, $nocommand) = @_;
 	my ($user, $host, $hosttext, $dir, @cmd) = split("\c@", $data);
-	return ($nocommand ? '' : $data) unless(defined($dir));
+	return ($nocommand ? '' : $data) unless (defined($dir));
 	my $cmd = (($nocommand || !@cmd) ? '' : ' ' . &join_quoted(@cmd));
 	my $nopwd = ($nodir || ($dir eq ''));
-	return $cmd if($nouser && $nopwd);
-	$nohost = 1 if(($hosttext eq '') || $nouser);
+	return $cmd if ($nouser && $nopwd);
+	$nohost = 1 if (($hosttext eq '') || $nouser);
 	my $color_user;
 	my $color_xhost = '';
 	my $color_meta = '';
-	if($use_color) {
+	if ($use_color) {
 		$color_meta = $col_meta;
-		unless($nohost) {
+		unless ($nohost) {
 			$hosttextsave //= ($ENV{'HOSTTEXTSAVE'} // '');
 			$color_xhost = ((($hosttextsave ne '') &&
 				($hosttextsave ne $hosttext)) ?
@@ -209,12 +209,12 @@ sub format_cmd {
 			($user . '@' . $host)) .
 		($nohost? ($nopwd ? '' : ($color_meta . ':')) :
 			($color_xhost . '(' . $hosttext . ')'))
-			unless($nouser);
+			unless ($nouser);
 	$reply .= ($use_color ? (($col_dir //= &my_color('bold green'))
 		. $dir . $col_reset . $col_meta)
-		: $dir) unless($nopwd);
+		: $dir) unless ($nopwd);
 	$reply .= ']';
-	$reply .= $col_reset if($use_color);
+	$reply .= $col_reset if ($use_color);
 	$reply . $cmd
 }
 
@@ -223,9 +223,9 @@ sub format_cmd {
 sub format_times {
 	my $use_color = shift();
 	my $ret = '';
-	for(; @_; shift()) {
-		next if($_[0] eq '');
-		if($ret eq '') {
+	for (; @_; shift()) {
+		next if ($_[0] eq '');
+		if ($ret eq '') {
 			$ret = ($use_color ? (' ' . $col_meta . '[' . $col_reset)
 				: ' [')
 		} else {
@@ -245,30 +245,30 @@ sub twodigit {
 
 sub format_time {
 	my ($format, $time) = @_;
-	return '' if((($format // '') eq '') ||
+	return '' if ((($format // '') eq '') ||
 		(!&is_nonnegative($time)) || ($time eq 0));
 	my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday) =
 		localtime($time);
 	my $replace = sub {
 		my ($c) = @_;
 		return &twodigit($hour) . ':' . &twodigit($min) . ':' . &twodigit($sec)
-			if($c eq 'T');
+			if ($c eq 'T');
 		return &twodigit($hour) . ':' . &twodigit($min) . ':' . &twodigit($sec)
-			if($c eq 'R');
-		return &twodigit($sec) if($c eq 'S');
-		return &twodigit($min) if($c eq 'M');
-		return &twodigit($hour) if($c eq 'H');
-		return &twodigit($mday) if($c eq 'd');
-		return &twodigit($mon + 1) if($c eq 'm');
-		return &twodigit($year % 100) if($c eq 'y');
-		return $year if($c eq 'Y');
-		return ($wday ? $wday : 7) if($c eq 'u');
-		return $wday if($c eq 'w');
-		if($c eq 'j') {
+			if ($c eq 'R');
+		return &twodigit($sec) if ($c eq 'S');
+		return &twodigit($min) if ($c eq 'M');
+		return &twodigit($hour) if ($c eq 'H');
+		return &twodigit($mday) if ($c eq 'd');
+		return &twodigit($mon + 1) if ($c eq 'm');
+		return &twodigit($year % 100) if ($c eq 'y');
+		return $year if ($c eq 'Y');
+		return ($wday ? $wday : 7) if ($c eq 'u');
+		return $wday if ($c eq 'w');
+		if ($c eq 'j') {
 			++$yday;
 			return ($yday < 100 ? ('0' . &twodigit($yday)) : "$yday")
 		}
-		return $time if($c eq 's');
+		return $time if ($c eq 's');
 		$c
 	};
 	$format =~ s{\%([TRSMHdmyYuwjs\%])}{$replace->($1)}ge;

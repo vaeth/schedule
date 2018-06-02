@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Server::Serverman v7.5.0;
+package Schedule::Server::Serverman v8.0.0;
 
 use strict;
 use warnings;

@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Client::Iterator v7.5.0;
+package Schedule::Client::Iterator v8.0.0;
 
 use strict;
 use warnings;
@@ -61,54 +61,54 @@ sub new {
 		atend => undef,
 		end => undef
 	}, $class);
-	if($a =~ m{^u}) {
+	if ($a =~ m{^u}) {
 		$self->{atbeg} = '';
 		($self->{beg}, $self->{atend}, $self->{end}) = split(m{\c@}, $a);
 		return $self
 	}
 	my ($atbeg, $beg, $sep, $atend, $end) = $s->decode_range($a);
-	unless(defined($atbeg)) {
+	unless (defined($atbeg)) {
 		$self->{finished} = 1;
 		return $self
 	}
 	($self->{atbeg}, $self->{beg}, $self->{sep}) = ($atbeg, $beg, $sep);
-	return $self if($sep eq '');
+	return $self if ($sep eq '');
 	($self->{atend}, $self->{end}) = ($atend, $end);
-	return $self if($sep eq '_');
+	return $self if ($sep eq '_');
 	my $beglast = (($atbeg eq '') && ($beg <= 0));
 	my $endlast = (($atend eq '') && ($end ne '') && ($end <= 0));
-	return $self unless($beglast || $endlast ||
+	return $self unless ($beglast || $endlast ||
 		($atbeg ne '') || ($atend ne ''));
 	my ($lastref, $openref) = @_;
 	my $last = undef;
 	my $is_open = undef;
 	my $noclose = 1;
 	my $s_open = sub {
-		return $is_open if(defined($is_open));
-		$openref = '' unless(defined($openref));
-		if(ref($openref) eq '') {
+		return $is_open if (defined($is_open));
+		$openref = '' unless (defined($openref));
+		if (ref($openref) eq '') {
 			$is_open = $noclose = !$openref
 		} else {
 			$is_open = ($$openref // '');
 			$$openref = $noclose = 1
 		}
-		unless($is_open || &openclient()) {
+		unless ($is_open || &openclient()) {
 			$noclose = 1;
 			return ''
 		}
 		$is_open = 1
 	};
 	my $s_close = sub {
-		return if($noclose);
+		return if ($noclose);
 		&client_send('close');
 		&closeclient();
 		$noclose = 1
 	};
 	my $s_last = sub {
-		return &is_nonnegative($last) if(defined($last));
+		return &is_nonnegative($last) if (defined($last));
 		$last = ((ref($lastref) eq '') ? $lastref : $$lastref);
-		return 1 if(&is_nonnegative($last));
-		return '' unless($s_open->());
+		return 1 if (&is_nonnegative($last));
+		return '' unless ($s_open->());
 		&client_send("status\c@0") &&
 			&client_recv($last) &&
 			($last //= '') &&
@@ -119,9 +119,9 @@ sub new {
 	my $s_at = sub {
 		my ($at) = @_;
 		my $ret = $known_ats{$at};
-		return $ret if(defined($ret));
-		return '' unless($s_open->());
-		return '' unless(&client_send("status\c@\@$at") &&
+		return $ret if (defined($ret));
+		return '' unless ($s_open->());
+		return '' unless (&client_send("status\c@\@$at") &&
 			&client_recv($ret) &&
 			$ret =~ m{^(\d+)});
 		$known_ats{$at} = $1;
@@ -130,8 +130,8 @@ sub new {
 		my ($at, $addref) = @_;
 		my $ret = $s_at->($at);
 		$s->warning('nonexistent job address: @' . $at)
-			if(($ret ne '') && !$ret);
-		if($ret && ($$addref ne '')) {
+			if (($ret ne '') && !$ret);
+		if ($ret && ($$addref ne '')) {
 			$$addref += $ret
 		} else {
 			$$addref = $ret
@@ -143,25 +143,25 @@ sub new {
 		$s_close->();
 		return $self
 	};
-	if($beglast || $endlast) {
-		return $s_error->() unless($s_last->());
-		$self->{beg} = $beg += $last if($beglast);
-		$self->{end} = $end += $last if($endlast)
+	if ($beglast || $endlast) {
+		return $s_error->() unless ($s_last->());
+		$self->{beg} = $beg += $last if ($beglast);
+		$self->{end} = $end += $last if ($endlast)
 	}
-	if($atbeg ne '') {
-		return $s_error->() unless($s_add->($atbeg, \$beg));
+	if ($atbeg ne '') {
+		return $s_error->() unless ($s_add->($atbeg, \$beg));
 		$self->{atbeg} = '';
 		$self->{beg} = $beg
 	}
-	if($atend ne '') {
-		return $s_error->() unless($s_add->($atend, \$end));
+	if ($atend ne '') {
+		return $s_error->() unless ($s_add->($atend, \$end));
 		$self->{atend} = '';
 		$self->{end} = $end
 	}
-	if(($beg <= 0) || (($end ne '') && ($end <= 0))) {
+	if (($beg <= 0) || (($end ne '') && ($end <= 0))) {
 		$s->warning('job number out of range: ' . $a);
-		$self->{beg} = 1 if($beg <= 0);
-		return $s_error->() if(($end ne '') && ($end <= 0))
+		$self->{beg} = 1 if ($beg <= 0);
+		return $s_error->() if (($end ne '') && ($end <= 0))
 	}
 	$s_close->();
 	$self
@@ -171,12 +171,12 @@ sub new {
 
 sub unfinished {
 	my $self = shift();
-	return '' if($self->{finished});
+	return '' if ($self->{finished});
 	my $ret;
 	my $sep = $self->{sep};
-	if($sep eq '') {
+	if ($sep eq '') {
 		$ret = 1
-	} elsif($sep eq '_') {
+	} elsif ($sep eq '_') {
 		$ret = ($self->{atbeg} <= $self->{atend})
 	} else {
 		my $end = $self->{end};
@@ -192,11 +192,11 @@ sub unfinished {
 
 sub increase {
 	my $self = shift();
-	return $self if($self->{finished});
+	return $self if ($self->{finished});
 	my $sep = $self->{sep};
-	if($sep eq '') {
+	if ($sep eq '') {
 		$self->{finished} = 1
-	} elsif($sep eq '_') {
+	} elsif ($sep eq '_') {
 		++($self->{atbeg})
 	} else {
 		++($self->{beg})
@@ -211,18 +211,18 @@ sub increase {
 
 sub current {
 	my $self = shift();
-	return undef if($self->{finished});
+	return undef if ($self->{finished});
 	my $atbeg = $self->{atbeg};
 	my $beg = $self->{beg};
-	if($atbeg eq '') {
-		return $beg unless(($_[0] // '') && ($self->{sep} eq '') &&
+	if ($atbeg eq '') {
+		return $beg unless (($_[0] // '') && ($self->{sep} eq '') &&
 			($atbeg eq '') && ($beg =~ m{^u}));
 		my ($here, $all) = ('/' . $self->{atend}, $self->{end});
 		return (($here eq $all) ? $here : $here . ' (' . $all . ')')
 	}
 	$atbeg = '@' . $atbeg;
-	return $atbeg unless($beg);
-	$beg = '+' . $beg if($beg > 0);
+	return $atbeg unless ($beg);
+	$beg = '+' . $beg if ($beg > 0);
 	$atbeg . $beg
 }
 
@@ -235,9 +235,9 @@ sub current {
 sub cond_error {
 	my $self = shift();
 	my $sep = $self->{sep};
-	return '' if(($sep eq ':') && ($self->{end} eq ''));
+	return '' if (($sep eq ':') && ($self->{end} eq ''));
 	$s->error('unavailable job ' . $self->current(1))
-		unless($_[0] // $s->quiet());
+		unless ($_[0] // $s->quiet());
 	1
 }
 

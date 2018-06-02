@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Helpers v7.5.4;
+package Schedule::Helpers v8.0.0;
 
 use strict;
 use warnings;
@@ -53,15 +53,15 @@ sub signals {
 
 sub my_user {
 	state $user;
-	return $user if(defined($user));
+	return $user if (defined($user));
 	$user = getpwuid($<);
-	$user = $< unless(&is_nonempty($user));
+	$user = $< unless (&is_nonempty($user));
 	$user
 }
 
 sub use_ansicolor {
 	state $ansicolor;
-	return $ansicolor if(defined($ansicolor));
+	return $ansicolor if (defined($ansicolor));
 	eval {
 		require Term::ANSIColor
 	};
@@ -88,32 +88,32 @@ sub split_quoted {
 	my @res = ();
 	my $word = undef;
 	my $quoting = '';
-	while($arg ne '') {
+	while ($arg ne '') {
 		my $add;
-		if(($arg =~ s{\A([^\"\'\s\$\\]+)}{}m) ||
+		if (($arg =~ s{\A([^\"\'\s\$\\]+)}{}m) ||
 			($arg =~ s{\A\\(.)}{}m) || ($arg =~ s{^(\\)$}{}) ||
 			($arg =~ s{\A\'((?:[^\'])*)\'?}{}m)) {
 			$add = $1
-		} elsif($arg =~ s{\A(\s+)}{}m) {
+		} elsif ($arg =~ s{\A(\s+)}{}m) {
 			$add = $1;
-			unless($quoting) {
-				if(defined($word)) {
+			unless ($quoting) {
+				if (defined($word)) {
 					push(@res, $word);
 					$word = undef
 				}
 				next
 			}
-		} elsif($arg =~ s{^\"}{}) {
+		} elsif ($arg =~ s{^\"}{}) {
 			$quoting = !$quoting;
 			next
-		} elsif(($arg =~ s{^\$([a-zA-Z_]\w*)}{}) ||
+		} elsif (($arg =~ s{^\$([a-zA-Z_]\w*)}{}) ||
 			($arg =~ s{^\$\{([a-zA-Z_]\w*)\}}{})) {
 			my $var = $1;
 			$add = ($ENV{$var} // '');
-			unless($quoting) {
+			unless ($quoting) {
 				croak('infinite recursion suspected: $' . $var
 					. 'expanded too often')
-					if(($used{$var} = ($used{$var} // 0) + 1) > 99999);
+					if (($used{$var} = ($used{$var} // 0) + 1) > 99999);
 				$arg = $add . $arg;
 				next
 			}
@@ -121,13 +121,13 @@ sub split_quoted {
 			$arg =~ s{^\$}{};
 			$add = '$'
 		}
-		if(defined($word)) {
+		if (defined($word)) {
 			$word .= $add
 		} else {
 			$word = $add
 		}
 	}
-	push(@res, $word) if(defined($word));
+	push(@res, $word) if (defined($word));
 	@res
 }
 
@@ -155,7 +155,7 @@ sub env_to_array {
 sub with_timeout {
 	my $timeout = shift();
 	my $code = shift();
-	return $code->(@_) unless($timeout);
+	return $code->(@_) unless ($timeout);
 	my $prev_alarm = alarm(0);
 	my $prev_time = ($prev_alarm ? time() : undef);
 	my @ret = ();
@@ -170,7 +170,7 @@ sub with_timeout {
 			alarm(($prev_alarm && ($prev_alarm < $timeout)) ?
 				$prev_alarm : $timeout);
 			my @r = ();
-			if($wantarray) {
+			if ($wantarray) {
 				@r = $code->(@_)
 			} else {
 				$r[0] = $code->(@_)
@@ -181,11 +181,11 @@ sub with_timeout {
 		alarm(0);
 		$at = ($@ // '')
 	}
-	if($at) {
-		if((ref($at) eq 'CODE') && ($at eq $code)) {
+	if ($at) {
+		if ((ref($at) eq 'CODE') && ($at eq $code)) {
 			$overrun = 1
 		} else {
-			if(!ref($at)){
+			if (!ref($at)){
 				chomp($at);
 				die($at . "\n")
 			} else {
@@ -193,15 +193,15 @@ sub with_timeout {
 			}
 		}
 	}
-	if($prev_alarm) {
+	if ($prev_alarm) {
 		my $new_alarm = $prev_alarm - (time() - $prev_time);
-		if($new_alarm >= 0) {
+		if ($new_alarm >= 0) {
 			alarm($new_alarm)
 		} else {
 			kill('ALRM', $$)
 		}
 	}
-	if($overrun) {
+	if ($overrun) {
 		$@ = 'timeout';
 		return undef
 	}

@@ -7,7 +7,7 @@
 # common parts of schedule and schedule-server which are always needed
 
 BEGIN { require 5.012 }
-package Schedule::Connect v7.6.0;
+package Schedule::Connect v8.0.0;
 
 use strict;
 use warnings;
@@ -30,14 +30,14 @@ our $VERSION; # auto-initialized to the version of Schedule::Connect
 # The default minimal/maximal/exact accepted versions for the modules/programs.
 # If undefined, no corresponding restriction is required.
 
-my $minversion = version->declare('v7.5.0');
+my $minversion = $VERSION;
 my $maxversion = $VERSION;
 my $extversion = undef;
 
 # The client accepts servers in the following interval:
 
-my $servermin = version->declare('v7.2.0');
-my $serversup = version->declare('v8.0.0');
+my $servermin = $VERSION;
+my $serversup = version->declare('v9.0.0');
 my $serversupallowed = '';
 
 # Exceptions overriding the above global rules.
@@ -50,18 +50,10 @@ my $serversupallowed = '';
 # For modules not appearing here, the above defaults apply.
 # If "undefined", no corresponding restriction is required.
 
-my $version753 = version->declare('v7.5.3');
-my $version754 = version->declare('v7.5.3');
-my $version760 = $VERSION;
+#my $version801 = $VERSION;
 my %minversion = (
 # temporary:
-	'Schedule' => $version760,
-	'ScheduleServer' => $version753,
-	'Schedule::Client::Clientfuncs' => $version754,
-	'Schedule::Client::Cmd::Queue' => $version760,
-	'Schedule::Client::Scheduleman' => $version760,
-	'Schedule::Helpers' => $version754,
-	'Schedule::Log' => $version754,
+#	'Schedule::Log' => $version801,
 
 # Keep the following always:
 	'Schedule::Connect' => undef
@@ -155,9 +147,9 @@ sub addr {
 
 sub timeout {
 	my $s = shift();
-	return $s->{timeout} unless(@_);
+	return $s->{timeout} unless (@_);
 	my $arg = shift();
-	return ($s->{timeout} = $arg) unless(ref($arg) eq 'CODE');
+	return ($s->{timeout} = $arg) unless (ref($arg) eq 'CODE');
 	&with_timeout(($s->{timeout}) => $arg, @_)
 }
 
@@ -199,7 +191,7 @@ sub color_force {
 sub color_stdout {
 	my $s = shift();
 	my $ret = $s->{color_stdout};
-	return $ret if(defined($ret));
+	return $ret if (defined($ret));
 	my $force = $s->color_force();
 	$s->{stdout_term} = (($force // $s->stdout_term())
 		? &use_ansicolor() : '')
@@ -208,7 +200,7 @@ sub color_stdout {
 sub color_stderr {
 	my $s = shift();
 	my $ret = $s->{color_stderr};
-	return $ret if(defined($ret));
+	return $ret if (defined($ret));
 	my $force = $s->color_force();
 	$s->{stderr_term} = (($force // $s->stderr_term())
 		? &use_ansicolor() : '')
@@ -237,7 +229,7 @@ sub error {
 	my $error = 'error';
 	my $colon = ': ';
 	my $len = length($name) + length($error) + (2 * length($colon));
-	if($s->color_stderr()) {
+	if ($s->color_stderr()) {
 		$name = $s->incolor(0, $name);
 		$error = $s->incolor(2, $error)
 	}
@@ -251,7 +243,7 @@ sub warning {
 	my $warning = 'warning';
 	my $colon = ': ';
 	my $len = length($name) + length($warning) + (2 * length($colon));
-	if($s->color_stderr()) {
+	if ($s->color_stderr()) {
 		$name = $s->incolor(0, $name);
 		$warning = $s->incolor(2, $warning)
 	}
@@ -265,7 +257,7 @@ sub incolor {
 	state $reset_col = &my_color('reset');
 	state $name_col;
 	return (($name_col //= &my_color('bold')) . $_[0] . $reset_col)
-		unless($mode);
+		unless ($mode);
 	state ($warn_col, $err_col);
 	($mode == 1) ?
 		(($warn_col //= &my_color('bold cyan')) . $_[0] . $reset_col) :
@@ -276,7 +268,7 @@ sub check_version {
 	my $s = shift();
 	my $name = (@_ ? shift() : caller());
 	my $ver;
-	if(@_) {
+	if (@_) {
 		$ver = $_[0]
 	} else {
 		no strict 'refs';
@@ -285,34 +277,34 @@ sub check_version {
 	my $m = (exists($minversion{$name}) ? $minversion{$name} : $minversion);
 	$s->fatal($name . ' ' . $ver->stringify() .
 		' too old (at least ' . $m->stringify() . ' required)')
-		if(defined($m) && ($ver < $m));
+		if (defined($m) && ($ver < $m));
 	$m = (exists($maxversion{$name}) ? $maxversion{$name} : $maxversion);
 	$s->fatal($name . ' ' . $ver->stringify() .
 		' too new (at most ' . $m->stringify() . ' supported)')
-		if(defined($m) && ($ver > $m));
+		if (defined($m) && ($ver > $m));
 	$m = (exists($extversion{$name}) ? $extversion{$name} : $extversion);
 	$s->fatal($name . ' ' . $ver->stringify() .
 		' wrong version (' . $m->stringify() . ' required)')
-		if(defined($m) && ($ver != $m))
+		if (defined($m) && ($ver != $m))
 }
 
 sub check_queue {
 	my $s = shift();
 	$s->usage('only supported: queue, start, start-or-queue, help, man')
-		if($s->check())
+		if ($s->check())
 }
 
 sub usage {
 	my $s = shift();
 	my $o = ((1 >= @_) ? ($_[0] // 1) : {@_});
 	$o = (&is_nonnegative($o) ? {-exitval => $o} : {-message => $o})
-		unless(ref($o) eq 'HASH');
+		unless (ref($o) eq 'HASH');
 	my @name;
-	if($s->check()) {
+	if ($s->check()) {
 		require Schedule::Client::Tmuxman;
 		&Schedule::Client::Tmuxman::man_tmux_init($s);
 		@name = qw(Schedule Client Tmuxman.pm)
-	} elsif(($s->name()) =~ m{serv}i) {
+	} elsif (($s->name()) =~ m{serv}i) {
 		require Schedule::Server::Serverman;
 		&Schedule::Server::Serverman::man_server_init($s);
 		@name = qw(Schedule Server Serverman.pm)
@@ -363,21 +355,21 @@ sub get_options {
 	'version|V', sub { print($s->name(), ' ', $VERSION->stringify(), "\n");
 		exit(0) },
 	@_) or $s->usage(2);
-	if(@ARGV) {
-		if($ARGV[0] =~ m/^man/i) {
+	if (@ARGV) {
+		if ($ARGV[0] =~ m/^man/i) {
 			$s->usage(-verbose => 2)
-		} elsif($ARGV[0] =~ m/^help/i) {
+		} elsif ($ARGV[0] =~ m/^help/i) {
 			$s->usage(0)
 		}
 	}
 	# Read password file before dropping permissions
 	for my $passfile (@passfile) {
-		next unless(open(my $fh, '<', $passfile));
+		next unless (open(my $fh, '<', $passfile));
 		binmode($fh);
 		my $pw = do { local $/; <$fh> }; # slurp!
 		close($fh);
 		chomp($pw);
-		$s->password($pw) if(&is_nonempty($pw))
+		$s->password($pw) if (&is_nonempty($pw))
 	}
 	1
 }
@@ -386,39 +378,39 @@ sub check_options {
 	my $s = shift();
 	my $timeout = $s->timeout();
 	$s->fatal("illegal timeout $timeout")
-		unless(&is_nonnegative($timeout));
+		unless (&is_nonnegative($timeout));
 	my $port = $s->port();
 	$s->fatal("illegal port $port")
-		unless(&is_nonnegative($port) && ($port <= 0xFFFF));
+		unless (&is_nonnegative($port) && ($port <= 0xFFFF));
 	my $daemon = $s->daemon();
-	if(defined($daemon) && !defined($have_posix)) {
+	if (defined($daemon) && !defined($have_posix)) {
 		eval {
 			require POSIX
 		};
-		if($@) {
+		if ($@) {
 			my @err=('you might need to install perl module POSIX',
 				$@);
-			if($daemon < 0) {
+			if ($daemon < 0) {
 				$s->fatal(@err)
 			} else {
-				$s->warning(@err) unless($s->quiet())
+				$s->warning(@err) unless ($s->quiet())
 			}
 			$have_posix = ''
 		} else {
 			$have_posix = 1
 		}
 	}
-	return unless(defined($s->password()));
+	return unless (defined($s->password()));
 	eval {
 		require Crypt::Rijndael
 	};
 	$s->fatal('you might need to install perl module Crypt::Rijndael', $@)
-		if($@);
+		if ($@);
 	eval {
 		require Digest::SHA
 	};
 	$s->fatal('you might need to install perl module Digest::SHA', $@)
-		if($@);
+		if ($@);
 	my $hash = Digest::SHA::sha256($s->password());
 	my $p = Crypt::Rijndael->new($hash, Crypt::Rijndael::MODE_CFB());
 	$p->set_iv('a' x 16);
@@ -429,23 +421,23 @@ sub exec_alpha {
 	my $s = shift();
 	$s->did_alpha(1);
 	my $alpha = $s->alpha();
-	return 0 unless(@$alpha);
+	return 0 unless (@$alpha);
 	my $sys = system(@$alpha);
 	my $errtext;
-	if($sys < 0) {
+	if ($sys < 0) {
 		$errtext = 'alpha-command could not be executed';
 		$sys = 127
-	} elsif($sys & 127) {
+	} elsif ($sys & 127) {
 		$errtext = 'alpha-command died with signal ' . ($sys & 127) .
 			(($sys & 128) ? ' (core dumped)' : '');
 		$sys = 127
 	} else {
 		$sys >>= 8;
-		return 0 unless($sys);
+		return 0 unless ($sys);
 		$errtext = 'alpha-command exited with status ' . $sys
 	}
-	if($s->alpha_ignore()) {
-		$s->warning($errtext) unless($s->quiet());
+	if ($s->alpha_ignore()) {
+		$s->warning($errtext) unless ($s->quiet());
 		return 0
 	}
 	$s->error($errtext);
@@ -454,34 +446,34 @@ sub exec_alpha {
 
 sub forking {
 	my $s = shift();
-	return 1 unless(defined(my $d = $s->daemon()));
+	return 1 unless (defined(my $d = $s->daemon()));
 	my $pid = fork();
 	$s->error('forking failed; running in foreground')
-		unless(defined($pid));
-	if($pid) {
-		if($have_posix) {
+		unless (defined($pid));
+	if ($pid) {
+		if ($have_posix) {
 			POSIX::_exit(0)
 		} else {
 			exit(0)
 		}
 	}
-	return 1 unless($d);
-	if(($d < 0) && (POSIX::setsid() < 0)) {
+	return 1 unless ($d);
+	if (($d < 0) && (POSIX::setsid() < 0)) {
 		$s->warning('cannot detach from controlling terminal');
 		return ''
 	}
 	my $ret = close(STDIN);
-	$ret = '' unless(close(STDOUT));
-	$ret = '' unless(($d > 0) || close(STDERR));
+	$ret = '' unless (close(STDOUT));
+	$ret = '' unless (($d > 0) || close(STDERR));
 	my $devnull = File::Spec->devnull();
-	$ret = '' unless(open(STDIN, '<', $devnull));
-	$ret = '' unless(open(STDOUT, '+>', $devnull));
+	$ret = '' unless (open(STDIN, '<', $devnull));
+	$ret = '' unless (open(STDOUT, '+>', $devnull));
 	(($d > 0) || open(STDERR, '+>', $devnull)) && $ret
 }
 
 sub default_filename {
 	my $s = shift();
-	return '' if(defined($s->file()));
+	return '' if (defined($s->file()));
 	$s->file(File::Spec->catfile(File::Spec->tmpdir(),
 		'schedule-' . &my_user(), 'server'));
 	1
@@ -489,39 +481,39 @@ sub default_filename {
 
 sub decode_range {
 	my $s = shift();
-	return undef unless(($_[0] // '') =~
+	return undef unless (($_[0] // '') =~
 		m{^\/?(?:\@(\d+))?([+-]?\d+)?(?:([:_])(?:\@(\d+))?([+-]?(\d+))?)?$});
 	my ($atbeg, $beg, $sep) = (($1 // ''), ($2 // ''), ($3 // ''));
 	my ($atend, $end) = (($4 // ''), ($5 // ''));
 	$beg =~ s{^\+}{};
-	return ($atbeg, $beg, '') if($sep eq '');
+	return ($atbeg, $beg, '') if ($sep eq '');
 	$end =~ s{^\+}{};
-	if($sep eq '_') {
-		if(($atbeg eq '') || ($atend eq '')) {
+	if ($sep eq '_') {
+		if (($atbeg eq '') || ($atend eq '')) {
 			return undef
 		}
-		if($beg eq '') {
+		if ($beg eq '') {
 			$beg = $end
-		} elsif($end eq '') {
+		} elsif ($end eq '') {
 			$end = $beg
-		} elsif($beg != $end) {
+		} elsif ($beg != $end) {
 			return undef
 		}
 	}
-	$beg = 1 if(($sep eq ':') && ($atbeg eq '') && ($beg eq ''));
+	$beg = 1 if (($sep eq ':') && ($atbeg eq '') && ($beg eq ''));
 	($atbeg, $beg, $sep, $atend, $end)
 }
 
 sub conn_send_raw {
 	my ($s, $conn, $data, $timeout) = @_;
-	if($timeout && !IO::Select->new($conn)->can_write($timeout)) {
+	if ($timeout && !IO::Select->new($conn)->can_write($timeout)) {
 		$s->error('timeout when writing to socket');
 		return ''
 	}
 	my $sent = &with_timeout($timeout => sub {
 		defined($conn->send($data))
 	});
-	if($@ eq 'timeout') {
+	if ($@ eq 'timeout') {
 		$s->error('timeout when writing to socket');
 		return ''
 	}
@@ -534,22 +526,22 @@ sub conn_recv_raw {
 	#  data = $_[0]
 	my $len = $_[1];
 	my $timeout = $_[2];
-	if($timeout && !IO::Select->new($conn)->can_read($timeout)) {
+	if ($timeout && !IO::Select->new($conn)->can_read($timeout)) {
 		$s->error('timeout when reading socket');
 		return ''
 	}
 	my $received = &with_timeout($timeout => sub {
 		defined($conn->recv($_[0], $len))
 	}, @_);
-	if($@ eq 'timeout') {
+	if ($@ eq 'timeout') {
 		$s->error('timeout when reading socket');
 		return ''
 	}
-	unless($received) {
+	unless ($received) {
 		$s->error('cannot receive from socket: ' . $!);
 		return ''
 	}
-	if($_[0] eq '') {
+	if ($_[0] eq '') {
 		$s->error('connection closed unexpectedly');
 		return ''
 	}
@@ -584,7 +576,7 @@ sub conn_send {
 
 sub conn_recv {
 	my $s = shift();
-	return '' unless($s->conn_recv_smart(@_));
+	return '' unless ($s->conn_recv_smart(@_));
 	my $p = ($s->password());
 	(!defined($p)) || &my_decrypt($p, $_[1])
 }
@@ -596,7 +588,7 @@ sub my_encrypt {
 
 sub my_decrypt {
 	my $p = shift();
-	return '' if(length($_[0]) % 16);
+	return '' if (length($_[0]) % 16);
 	$_[0] = $p->decrypt($_[0]);
 	&unpadding($_[0]) || ($_[0] = '')
 }
@@ -609,7 +601,7 @@ sub padding {
 }
 
 sub unpadding {
-	return '' if(length($_[0]) <= 32);
+	return '' if (length($_[0]) <= 32);
 	$_[0] = substr($_[0], 32);
 	$_[0] =~ s{To\ verify\ the\ password\,\ check\ this\ magic\ string\ as\ a\ checksum\!\n*$}{}
 }

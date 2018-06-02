@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Client::Cmd::Test v7.5.0;
+package Schedule::Client::Cmd::Test v8.0.0;
 
 use strict;
 use warnings;
@@ -28,16 +28,16 @@ sub test {
 	&test_init();
 	my ($tests, $num) = @_;
 	my $type = $tests->[$num];
-	if(@ARGV) {
+	if (@ARGV) {
 		push(@$type, @ARGV);
 		&test_empty($tests)
-	} elsif(&test_empty($tests)) {
+	} elsif (&test_empty($tests)) {
 		push(@$type, ':')
 	}
-	return '' unless(&openclient() &&
+	return '' unless (&openclient() &&
 		&client_send('test' . &test_args($tests)) &&
 		&client_recv(my $reply));
-	return '' unless(&is_nonnegative($reply));
+	return '' unless (&is_nonnegative($reply));
 	&set_exitstatus($reply);
 	1
 }

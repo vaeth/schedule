@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Client::Cmd::Parallel v7.5.0;
+package Schedule::Client::Cmd::Parallel v8.0.0;
 
 use strict;
 use warnings;
@@ -35,38 +35,38 @@ sub parallel {
 	&parallel_init();
 	my ($waiting) = @_;
 	&validate_args();
-	return '' unless(&openclient());
+	return '' unless (&openclient());
 	my %unique_ids = ();
 	my $last = undef;
 	for my $a (@ARGV) {
-		for(my $iter = Schedule::Client::Iterator->new($a, \$last);
+		for (my $iter = Schedule::Client::Iterator->new($a, \$last);
 			$iter->unfinished(); $iter->increase()) {
-			return '' unless(&runner("bg\c@" . $iter->current(),
+			return '' unless (&runner("bg\c@" . $iter->current(),
 				my $job, my $stat));
-			if($job eq '0') {
-				last unless($iter->cond_error());
+			if ($job eq '0') {
+				last unless ($iter->cond_error());
 				&set_exitstatus(1);
 				next
 			}
-			next unless($waiting);
-			if($stat eq '') {
+			next unless ($waiting);
+			if ($stat eq '') {
 				$unique_ids{$job} = undef
-			} elsif($stat) {
+			} elsif ($stat) {
 				&set_exitstatus($stat)
 			}
 		}
 	}
 	&client_send('close');
-	return '' unless(&closeclient());
-	return 1 unless($waiting);
-	if(!$s->did_alpha()) {
+	return '' unless (&closeclient());
+	return 1 unless ($waiting);
+	if (!$s->did_alpha()) {
 		my $ret = $s->exec_alpha();
-		exit($ret) if($ret);
+		exit($ret) if ($ret);
 		$s->forking()
 	}
 	for my $id (keys(%unique_ids)) {
-		return '' unless(&runner("wait\c@$id", my $job, my $stat, 1));
-		&set_exitstatus($stat) if(($job ne '0') && $stat)
+		return '' unless (&runner("wait\c@$id", my $job, my $stat, 1));
+		&set_exitstatus($stat) if (($job ne '0') && $stat)
 	}
 	1
 }

@@ -63,6 +63,7 @@ case $service in
 {'(--no-dir --nodir)-D','(--nodir -D)--no-dir','(--no-dir -D)--nodir'}'[Suppress output of PWD]'
 {'(--keep-dir --keepdir)-d','(--keep-dir -d)--keep-dir','(--keep-dir -d)--keepdir'}'[Do not shortcut CWD]'
 {'(--no-command --nocommand)-c','(--nocommand -c)--no-command','(--no-command -c)--nocommand'}'[Suppress output of command]'
+{'(--no-pausing)--nopausing','(--nopausing)--no-pausing'}'[Suppress output of pausing state]'
 '(--no-title --notitle)--title[Force windows title output]'
 '(--text --title '{'--no-title)--notitle','--notitle)--no-title'}'[Suppress windows title output]'
 '(--no-status --nostatus)--status[Force status line output]'
@@ -115,6 +116,9 @@ case $state in
 	{'delete','remove'}':remove queued jobs from list'
 	{'move','shift','insert'}':shift queued jobs in list'
 	'cancel:cancel queued jobs'
+	'pause:pause to avoid races'
+	{'continue','unpause'}':finish pause'
+	'test-pausing:output 1 if pausing'
 	)
 	}
 	_describe -t commands 'command' cmds && ret=0;;

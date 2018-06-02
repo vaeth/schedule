@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Client::Scheduleman v7.6.0;
+package Schedule::Client::Scheduleman v8.0.0;
 
 use strict;
 use warnings;
@@ -253,6 +253,9 @@ B<HOSTTEXT>: If B<HOSTTEXTSAVE> is nonempty and differs from B<HOSTTEXT>
 then B<HOSTTEXT> is printed in red.
 The color of the user depends on whether the user is root or somebody else.
 
+If the server is in the pausing state, a corresponding output will be printed
+at the end of the list unless B<--no-pause> is given.
+
 =item B<status> I<jobs>
 
 This is a script-friendly variant of B<schedule list>:
@@ -283,6 +286,12 @@ For instance, B<schedule number 0> will effectively output the length of the
 queue (since the last job number in the queue is its length, and B<0> is
 output if there is no such job).
 
+=item B<test-pausing>
+
+This is a script-friendly variant of B<schedule list>:
+It outputs 1 (followed by a newline) to stdout if the server is currently
+in the pausing state.
+
 =item B<ok>|B<finished>|B<started>
 
 This is a more script-friendly and race-free form of B<status>,
@@ -308,7 +317,7 @@ cannot be queried through B<schedule> anymore.
 Be aware that removing a job renumbers all subsequent jobs in the queue.
 It is intentional that commands like B<schedule run> are not informed about
 this renumbering so that B<remove> and B<insert> can be used to modify the
-order of the running queue.
+order of the running queue. Use B<pause> and B<continue> to avoid races.
 
 =item B<insert> I<jobs> or B<move> I<jobs>
 
@@ -325,7 +334,27 @@ For instance, when moving the first job to the end, all commands obtain
 different numbers.
 It is intentional that commands like B<schedule run> are not informed about
 this renumbering so that B<remove> and B<insert> can be used to modify the
-order of the running queue.
+order of the running queue. Use B<pause> and B<continue> to avoid races.
+
+=item B<pause>
+
+Set the server into a pausing state which can only be finished by B<continue>.
+While pausing, the server will postpone most requests until the B<continue>
+command is sent, including the requests of programs to finish.
+The only requests which are not postponed are requests which manipulate
+the job list (B<start>, B<queue>, B<start-or-queue>, B<remove>, B<insert>),
+query commands (B<list>, B<status>, B<number>, B<address>, B<test-paused>,
+B<ok>, B<finished>, B<started>), or B<stop-server>.
+
+The purpose of the pausing state is to avoid races while the list of
+running processes is manipulated by the mentioned commands.
+It is recommended to use this state only for a very small period and
+then finish it immediately with B<continue>.
+
+=item B<continue>
+
+This cancels the effect of a previous B<pause> command.
+If the server is not in a pausing state, this command has no effect.
 
 =item B<cancel> I<jobs>
 
@@ -541,6 +570,11 @@ the current working directory for the scheduled command.
 
 If this option is specified, B<schedule list> will suppress the output of
 the queued command.
+
+=item B<--no-pausing> or B<--nopausing>
+
+If this option is specified, B<schedule list> will not output a corresponding
+message at the end of the list if the server is in the pausing state.
 
 =item B<--keep-dir> or B<--keepdir> or B<-d>
 

@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Server::Serverfuncs v7.5.0;
+package Schedule::Server::Serverfuncs v8.0.0;
 
 use strict;
 use warnings;
@@ -86,11 +86,11 @@ sub form_unique {
 
 sub signal_handler {
 	&signals();
-	$log->log('info', 'stop-signal') if(defined($log));
+	$log->log('info', 'stop-signal') if (defined($log));
 	&send_exit(7);
 	&closeserver();
-	unlink($s->file()) unless($s->tcp());
-	$log->log('info', 'exit (130)') if(defined($log));
+	unlink($s->file()) unless ($s->tcp());
+	$log->log('info', 'exit (130)') if (defined($log));
 	exit(130)
 }
 
@@ -107,7 +107,7 @@ sub openserver_standard {
 		Listen => IO::Socket::SOMAXCONN(),
 		Reuse => 1
 	)});
-	$s->fatal('timeout when setting up socket') if($@ eq 'timeout');
+	$s->fatal('timeout when setting up socket') if ($@ eq 'timeout');
 	defined($socket) || $s->fatal('unable to setup socket: ' . $!,
 		($s->tcp() ? () : 'maybe you should remove ' . $s->file()))
 }
@@ -115,14 +115,14 @@ sub openserver_standard {
 sub openserver_fd {
 	$socket = ($s->tcp() ? IO::Socket::INET->new() :
 		IO::Socket::UNIX->new());
-	$s->fatal('cannot allocate socket: ' . $!) unless(defined($socket));
+	$s->fatal('cannot allocate socket: ' . $!) unless (defined($socket));
 	$socket->fdopen($_[0], 'r') ||
 		$s->fatal('cannot open file descriptor ' . $_[0])
 }
 
 sub openserver {
 	my ($fd) = @_;
-	if(&is_nonnegative($fd)) {
+	if (&is_nonnegative($fd)) {
 		$s->file(undef);
 		&openserver_fd($fd)
 	} else {
@@ -134,16 +134,16 @@ sub openserver {
 
 sub closeserver {
 	my $ret = 1;
-	$ret = '' if(defined($socket) && !($socket->close()));
-	unlink($s->file()) unless($s->tcp() || (!defined $s->file()) || !(-S $s->file()));
+	$ret = '' if (defined($socket) && !($socket->close()));
+	unlink($s->file()) unless ($s->tcp() || (!defined $s->file()) || !(-S $s->file()));
 	$ret
 }
 
 sub send_exit {
 	my ($stat) = @_;
 	my @fail = ();
-	while(my ($i, $job) = each(@$joblist)) {
-		push(@fail, &indexname($i)) unless(&send_remove($job, $stat));
+	while (my ($i, $job) = each(@$joblist)) {
+		push(@fail, &indexname($i)) unless (&send_remove($job, $stat));
 		&send_finish($job, $stat)
 	}
 	@fail
@@ -151,17 +151,17 @@ sub send_exit {
 
 sub send_remove {
 	my ($job, $stat) = @_;
-	return 1 if(defined(&get_status($job)));
+	return 1 if (defined(&get_status($job)));
 	my $ret = 1;
 	my $conn = &get_conn($job);
-	$ret = '' unless($s->conn_send($conn, $stat));
+	$ret = '' unless ($s->conn_send($conn, $stat));
 	$conn->close() && $ret
 }
 
 sub send_finish {
 	my ($job, $stat) = @_;
 	&set_etime($job);
-	while(defined(my $conn = &shift_wait($job))) {
+	while (defined(my $conn = &shift_wait($job))) {
 		$s->conn_send($conn, $stat);
 		close($conn)
 	}
@@ -180,17 +180,17 @@ sub test_jobs {
 	my $ret = 0;
 	for my $i (&unique_indices($ok)) {
 		my $s = &get_status($joblist->[$i]);
-		$s = 1 unless(&is_nonempty($s));
-		$ret = $s if($s > $ret);
+		$s = 1 unless (&is_nonempty($s));
+		$ret = $s if ($s > $ret);
 	}
-	return $ret if($ret);
+	return $ret if ($ret);
 	for my $i (&unique_indices($finished)) {
 		my $s = &get_status($joblist->[$i]);
-		return 1 unless(&is_nonempty($s))
+		return 1 unless (&is_nonempty($s))
 	}
 	for my $i (&unique_indices($started)) {
 		my $s = &get_status($joblist->[$i]);
-		return 1 unless(defined($s))
+		return 1 unless (defined($s))
 	}
 	0
 }
@@ -206,15 +206,15 @@ sub job_from_unique {
 
 sub index_from_unique {
 	my ($u) = @_;
-	return undef unless(substr($u, $[, length($serverid)) eq $serverid);
+	return undef unless (substr($u, $[, length($serverid)) eq $serverid);
 	&index_from_at(substr($u, length($serverid) + $[))
 }
 
 sub index_from_at {
 	my ($u) = @_;
-	return undef unless(&is_nonnegative($u));
-	while(my ($i, $job) = each(@$joblist)) {
-		if(&get_unique($job) == $u) {
+	return undef unless (&is_nonnegative($u));
+	while (my ($i, $job) = each(@$joblist)) {
+		if (&get_unique($job) == $u) {
 			keys(@$joblist);  # reset "each" counter
 			return $i
 		}
@@ -231,7 +231,7 @@ sub index_from_pair {
 # return unique list of internal indices corresponding to index names
 
 sub unique_indices {
-	return () unless((my $max = @$joblist) > 0);
+	return () unless ((my $max = @$joblist) > 0);
 	my %have = ();
 	my @ret = ();
 	my $s_valid = sub {
@@ -240,39 +240,39 @@ sub unique_indices {
 	};
 	my $s_push = sub {
 		my ($i) = @_;
-		return unless($s_valid->($i) && !exists($have{$i}));
+		return unless ($s_valid->($i) && !exists($have{$i}));
 		$have{$i} = 1;
 		push(@ret, $i)
 	};
 	my $s_pair = sub {
 		my $a = shift();
-		return &index_from_pair($a, $_[0]) if($a ne '');
+		return &index_from_pair($a, $_[0]) if ($a ne '');
 		$a = shift();
-		$a = 0 if($a eq '');
+		$a = 0 if ($a eq '');
 		(--$a >= 0) ? $a : ($a + $max)
 	};
 	for my $name (split(' ', ($_[0] // ''))) {
 		my ($atbeg, $beg, $sep, $atend, $end) = $s->decode_range($name);
-		unless(defined($atbeg)) {
+		unless (defined($atbeg)) {
 			$s->warning('invalid job specification: ' .
-				&join_quoted($name)) unless($s->quiet());
+				&join_quoted($name)) unless ($s->quiet());
 			next
 		}
-		if($sep eq '_') {
-			for(; $atbeg <= $atend; ++$atbeg) {
+		if ($sep eq '_') {
+			for (; $atbeg <= $atend; ++$atbeg) {
 				$s_push->(&index_from_pair($atbeg, $beg))
 			}
 			next
 		}
 		my $i = $s_pair->($atbeg, $beg);
-		if($sep eq '') {
+		if ($sep eq '') {
 			$s_push->($i);
 			next
 		}
-		next unless($s_valid->($i));
+		next unless ($s_valid->($i));
 		my $e = $s_pair->($atend, $end);
-		next unless($s_valid->($e));
-		for(; $i <= $e; ++$i) {
+		next unless ($s_valid->($e));
+		for (; $i <= $e; ++$i) {
 			$s_push->($i)
 		}
 	}
@@ -283,7 +283,7 @@ sub unique_indices {
 
 sub indexname {
 	my ($i) = @_;
-	return '0' unless(&is_nonnegative($i) && ($i < @$joblist));
+	return '0' unless (&is_nonnegative($i) && ($i < @$joblist));
 	++$i;
 	"$i"
 }
@@ -295,26 +295,26 @@ sub indexname {
 
 sub my_index {
 	my $arg = (shift() // '');
-	return &index_from_unique($arg) if($arg =~ m{^u});
+	return &index_from_unique($arg) if ($arg =~ m{^u});
 	my $end = (shift() // '');
-	if($arg eq '') {
-		return undef unless($end);
+	if ($arg eq '') {
+		return undef unless ($end);
 		$arg = '0'
 	}
 	my ($at, $num) = $s->decode_range($arg);
-	unless(defined($at)) {
+	unless (defined($at)) {
 		$s->warning('invalid job specification: ' . &join_quoted($arg))
-			unless($s->quiet());
+			unless ($s->quiet());
 		return undef
 	}
-	if($at ne '') {
+	if ($at ne '') {
 		$num = &index_from_pair($at, $num);
-		return undef unless(defined($num));
-		return ($end ? 0 : undef) if($num < 0)
-	} elsif($num <= 0) {
+		return undef unless (defined($num));
+		return ($end ? 0 : undef) if ($num < 0)
+	} elsif ($num <= 0) {
 		$num += @$joblist;
-		--$num unless($end);
-		return ($end ? 0 : undef) if($num < 0)
+		--$num unless ($end);
+		return ($end ? 0 : undef) if ($num < 0)
 	} else {
 		--$num
 	}
@@ -380,7 +380,7 @@ sub get_etime {
 }
 
 sub set_etime {
-	$_[0]->[7] = time() unless($_[0]->[7] ne '')
+	$_[0]->[7] = time() unless ($_[0]->[7] ne '')
 }
 
 1;

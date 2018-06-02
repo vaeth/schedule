@@ -3,7 +3,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package ScheduleServer v7.5.3;
+package ScheduleServer v8.0.0;
 
 use strict;
 use warnings;
@@ -25,7 +25,7 @@ use File::Spec ();
 
 use lib '/usr/share/schedule';
 use FindBin;
-if(($FindBin::Bin // '') ne '') {
+if (($FindBin::Bin // '') ne '') {
 	use lib File::Spec->catdir($FindBin::Bin, File::Spec->updir(),
 		'share', 'schedule');
 	use lib File::Spec->catdir($FindBin::Bin, 'share', 'schedule');
@@ -65,25 +65,25 @@ sub prepare_file {
 	umask($umask);
 	my ($vol, $dir) = File::Spec->splitpath($s->file());
 	$dir = File::Spec->catpath($vol, $dir);
-	return 1 if($dir eq '');
+	return 1 if ($dir eq '');
 	$s->fatal('cannot create directory ' . $dir)
-		unless((-d $dir) || File::Path::make_path($dir));
+		unless ((-d $dir) || File::Path::make_path($dir));
 	my @stat = lstat($dir);
-	$s->fatal('cannot find directory ' . $dir) unless(@stat);
-	return 1 if($skipcheck);
+	$s->fatal('cannot find directory ' . $dir) unless (@stat);
+	return 1 if ($skipcheck);
 	$s->fatal($dir . ' owned by ' . $stat[4] . ':' . $stat[5] .
 		' instead of ' . $< . ':' . $(,
 	'This may be a security risk. Use -S if it is intentional')
-		if(($stat[4] != $<) || ($stat[5] != $())
+		if (($stat[4] != $<) || ($stat[5] != $())
 }
 
 #
 # Now the main program:
 #
 
-if(exists($ENV{'SCHEDULE_SERVER_OPTS'})) {
+if (exists($ENV{'SCHEDULE_SERVER_OPTS'})) {
 	unshift(@ARGV, &env_to_array('SCHEDULE_SERVER_OPTS'))
-} elsif(exists($ENV{'SCHEDULE_OPTS'})) {
+} elsif (exists($ENV{'SCHEDULE_OPTS'})) {
 	unshift(@ARGV, &env_to_array('SCHEDULE_OPTS'))
 }
 
@@ -112,13 +112,13 @@ $s->get_options(
 
 # First, drop permissions if possible:
 
-unless($keepgroup) {
-	unless(&is_nonnegative($gid)) {
-		if($group =~ m{^\w+$}) {
+unless ($keepgroup) {
+	unless (&is_nonnegative($gid)) {
+		if ($group =~ m{^\w+$}) {
 			$gid = getgrnam($group);
-			unless(&is_nonnegative($gid)) {
+			unless (&is_nonnegative($gid)) {
 				$gid = getgrnam('nobody');
-				if(&is_nonnegative($gid)) {
+				if (&is_nonnegative($gid)) {
 					$s->warning("failed to get group id of $group",
 						'falling back to user nobody');
 				} else {
@@ -132,19 +132,19 @@ unless($keepgroup) {
 		}
 	}
 	$) = ($gid);
-	$) = $gid if($!);
-	$s->warning('failed to set egid to $gid:', $!) if($!);
+	$) = $gid if ($!);
+	$s->warning('failed to set egid to $gid:', $!) if ($!);
 	$( = $gid;
-	$s->warning('failed to set gid to $gid:', $!) if($!)
+	$s->warning('failed to set gid to $gid:', $!) if ($!)
 }
 
-unless($keepuser) {
-	unless(&is_nonnegative($uid)) {
-		if($user =~ m{^\w+$}) {
+unless ($keepuser) {
+	unless (&is_nonnegative($uid)) {
+		if ($user =~ m{^\w+$}) {
 			$uid = getpwnam($user);
-			unless(&is_nonnegative($uid)) {
+			unless (&is_nonnegative($uid)) {
 				$uid = getpwnam('nobody');
-				if(&isnonnegative($uid)) {
+				if (&isnonnegative($uid)) {
 					$s->warning("failed to get user id of $user",
 						'falling back to user nobody');
 				} else {
@@ -158,9 +158,9 @@ unless($keepuser) {
 		}
 	}
 	$> = $uid;
-	$s->warning("failed to set euid to $uid:", $!) if($!);
+	$s->warning("failed to set euid to $uid:", $!) if ($!);
 	$< = $uid;
-	$s->warning("failed to set uid to $uid:", $!) if($!)
+	$s->warning("failed to set uid to $uid:", $!) if ($!)
 }
 
 # Postprocess options:
@@ -169,11 +169,11 @@ $s->check_options();
 
 # Process arguments:
 
-$s->usage(2) if(@ARGV);
+$s->usage(2) if (@ARGV);
 
 # Call main functions:
 
-&prepare_file() unless($fd || $s->tcp());
+&prepare_file() unless ($fd || $s->tcp());
 
 require Schedule::Server::Serverfuncs;
 require Schedule::Server::Loop;
@@ -181,22 +181,22 @@ require Schedule::Server::Loop;
 Schedule::Server::Serverfuncs->import(qw(:INIT));
 
 &server_init($s);
-exit(1) unless(&openserver($fd));
-unless($s->did_alpha()) {
+exit(1) unless (&openserver($fd));
+unless ($s->did_alpha()) {
 	my $ret = $s->exec_alpha();
-	exit($ret) if($ret);
+	exit($ret) if ($ret);
 	$s->forking()
 }
 
 # Prepare logging
 
-if(($logfile ne '') || ($syslog ne '')) {
+if (($logfile ne '') || ($syslog ne '')) {
 	require Schedule::Log;
 	$log = Schedule::Log->new($s, $syslog, $logfile, $log_append);
 	$log->log('info', 'listen')
 }
 my $succ = &Schedule::Server::Loop::serverloop($log);
-$succ = '' unless(&closeserver());
+$succ = '' unless (&closeserver());
 my $x = ($succ ? 0 : 1);
-$log->log('info', 'exit (' . $x . ')') if(defined($log));
+$log->log('info', 'exit (' . $x . ')') if (defined($log));
 exit($x);

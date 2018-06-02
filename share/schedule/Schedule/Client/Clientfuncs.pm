@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Client::Clientfuncs v7.5.4;
+package Schedule::Client::Clientfuncs v8.0.0;
 
 use strict;
 use warnings;
@@ -67,22 +67,22 @@ sub openclient {
 		Peer => $s->file(),
 		Type => IO::Socket::SOCK_STREAM()
 	)});
-	if($@ eq 'timeout') {
+	if ($@ eq 'timeout') {
 		my $silence = (shift() // '');
-		$s->error('timeout when setting up socket') unless($silence);
+		$s->error('timeout when setting up socket') unless ($silence);
 		return ''
 	}
-	unless(defined($socket)) {
+	unless (defined($socket)) {
 		my $silence = (shift() // '');
 		$s->error("unable to setup socket: $!",
 			'maybe you should run first: schedule-server --daemon')
-			unless($silence);
+			unless ($silence);
 		return ''
 	}
 	state $checked = '';
-	return 1 if($checked);
+	return 1 if ($checked);
 	my $ver;
-	if(&client_send('version') && &client_recv($ver) &&
+	if (&client_send('version') && &client_recv($ver) &&
 		&is_nonempty($ver)) {
 		&check_server_version($ver) || return ''
 	} else {
@@ -94,7 +94,7 @@ sub openclient {
 
 sub check_server_version {
 	my ($v) = @_;
-	unless($v =~ s{^schedule\-server }{}) {
+	unless ($v =~ s{^schedule\-server }{}) {
 		$s->error('schedule-server did not send its version');
 		return ''
 	}
@@ -102,27 +102,27 @@ sub check_server_version {
 	eval {
 		$ver = version->parse($v)
 	};
-	if((!defined($ver)) || $@) {
+	if ((!defined($ver)) || $@) {
 		$s->error('schedule-server sent invalid version');
 		return ''
 	}
 	my $m = $s->servermin();
-	if(defined($m) && ($ver < $m)) {
+	if (defined($m) && ($ver < $m)) {
 		$s->error('schedule-server ' . $ver->stringify() .
 			' too old (at least ' .
 			$m->stringify() . ' required)');
 		return ''
 	}
 	$m = $s->serversup();
-	return 1 unless(defined($m));
-	if($s->serversupallowed()) {
-		if($ver > $m) {
+	return 1 unless (defined($m));
+	if ($s->serversupallowed()) {
+		if ($ver > $m) {
 			$s->error('schedule-server ' . $ver->stringify() .
 				' too new (at most ' .
 				$m->stringify() . ' supported)');
 			return ''
 		}
-	} elsif($ver >= $m) {
+	} elsif ($ver >= $m) {
 		$s->error('schedule-server ' . $ver->stringify() .
 			' too new (must be before ' . $m->stringify() . ')');
 		return ''
@@ -131,12 +131,12 @@ sub check_server_version {
 }
 
 sub closeclient {
-	return 1 unless(defined($socket));
+	return 1 unless (defined($socket));
 	my $ret = ($socket->close());
 	$socket = undef;
-	return 1 if($ret);
+	return 1 if ($ret);
 	my $silence = (shift() // '');
-	$s->error("failed to close socket: $!") unless($silence);
+	$s->error("failed to close socket: $!") unless ($silence);
 	''
 }
 
@@ -145,7 +145,7 @@ sub client_send {
 }
 
 sub client_recv {
-	return 1 if($s->conn_recv($socket, @_));
+	return 1 if ($s->conn_recv($socket, @_));
 	&closeclient(1);
 	exit($exitstatus = 7)
 }
@@ -154,11 +154,11 @@ sub client_recv {
 
 sub set_exitstatus {
 	my ($stat) = @_;
-	$exitstatus = $stat if($exitstatus < $stat)
+	$exitstatus = $stat if ($exitstatus < $stat)
 }
 
 sub client_exit {
-	$exitstatus = 7 unless(&closeclient() && $_[0]);
+	$exitstatus = 7 unless (&closeclient() && $_[0]);
 	exit($exitstatus)
 }
 

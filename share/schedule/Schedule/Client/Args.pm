@@ -4,7 +4,7 @@
 # This is part of the schedule project.
 
 BEGIN { require 5.012 }
-package Schedule::Client::Args v7.5.0;
+package Schedule::Client::Args v8.0.0;
 
 use strict;
 use warnings;
@@ -39,20 +39,20 @@ sub args_init {
 sub validate_args {
 	my ($array) = @_;
 	my $colon_if_empty = '';
-	unless(defined($array)) {
+	unless (defined($array)) {
 		$colon_if_empty = 1;
 		$array = \@ARGV
 	}
 	@$array = split(' ', join(' ', @$array));
-	unless(@$array) {
-		return '' unless($colon_if_empty);
+	unless (@$array) {
+		return '' unless ($colon_if_empty);
 		@$array = (':');
 		return 1
 	}
 	for my $i (@$array) {
 		my ($valid) = $s->decode_range($i);
 		$s->fatal('invalid job specification: ' . &join_quoted($i))
-			unless(defined($valid))
+			unless (defined($valid))
 	}
 	1
 }
