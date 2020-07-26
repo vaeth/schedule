@@ -1,4 +1,6 @@
 # /etc/conf.d/schedule
+# Copyright Martin V\"ath <martin at mvath.de>.
+# SPDX-License-Identifier: BSD-3-Clause
 
 schedule_user=schedule
 schedule_group=schedule

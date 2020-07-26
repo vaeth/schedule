@@ -1,6 +1,7 @@
 # Schedule::Connect.pm
 #
-# Copyright Martin Väth <martin@mvath.de>.
+# Copyright Martin V\"ath <martin at mvath.de>.
+# SPDX-License-Identifier: BSD-3-Clause
 # This is part of the schedule project.
 
 # This is the "main" file of the schedule project, containing the

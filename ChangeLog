@@ -1,5 +1,9 @@
 # ChangeLog for schedule
 
+*schedule-v8.0.1:
+	Martin Väth <martin at mvath.de>:
+	- Add SPDX-License-Identifier
+
 *schedule-v8.0.0:
 	Martin Väth <martin at mvath.de>:
 	- new commands pause, continue, test-pause, --no-pausing to avoid races
